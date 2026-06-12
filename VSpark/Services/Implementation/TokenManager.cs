@@ -1,23 +1,24 @@
-﻿using Microsoft.Extensions.Options;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
+using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using System.Text;
 
+using VSpark.Data;
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
 using VSpark.Models.Config;
 
 namespace VSpark.Services.Implementation;
 
-// Attention! Suppressed null warnings!
-public class JwtTokenProvider(IOptions<JwtSettings> jwtSettings) : IJwtTokenProvider
+public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<SparkDbContext> dbFactory) : ITokenManager
 {
     private byte[]? _jwtSecret;
 
-    public string? GenerateToken(User owner)
+    public string? CreateJwtToken(User owner)
     {
         if (_jwtSecret == null)
             _jwtSecret = Encoding.UTF8.GetBytes(jwtSettings.Value.Secret!);
@@ -44,7 +45,7 @@ public class JwtTokenProvider(IOptions<JwtSettings> jwtSettings) : IJwtTokenProv
         return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
     }
 
-    public RefreshToken GenerateRefreshToken(User owner, DateTime expires)
+    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires)
     {
         RefreshToken refreshToken = new();
         refreshToken.Owner = owner.UserId;
@@ -59,11 +60,25 @@ public class JwtTokenProvider(IOptions<JwtSettings> jwtSettings) : IJwtTokenProv
 
         refreshToken.Token = Convert.ToBase64String(rns);
 
+        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+
+        if (dbContext.RefreshTokens.Any(x => x.Owner == owner.UserId))
+            return null;
+
+        dbContext.RefreshTokens.Add(refreshToken);
+
         return refreshToken;
     }
 
-    public void CleanupRefreshToken(Guid userId)
+    public async Task CleanupRefreshTokenAsync(string token)
     {
-        
+        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+
+        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == token);
+
+        if (targetToken == null)
+            return;
+
+        dbContext.RefreshTokens.Remove(targetToken);
     }
 }
