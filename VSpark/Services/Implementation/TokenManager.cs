@@ -2,10 +2,10 @@
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
-using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
 
 using VSpark.Data;
 using VSpark.Models.Auth;
@@ -75,6 +75,18 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
         RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == token);
+
+        if (targetToken == null)
+            return;
+
+        dbContext.RefreshTokens.Remove(targetToken);
+    }
+
+    public async Task CleanupRefreshTokenAsync(User owner)
+    {
+        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+
+        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Owner == owner.UserId);
 
         if (targetToken == null)
             return;

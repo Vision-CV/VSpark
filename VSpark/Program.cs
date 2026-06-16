@@ -8,6 +8,8 @@ using System.Text;
 using VSpark.Data;
 using VSpark.Hubs;
 using VSpark.Models.Config;
+using VSpark.Services;
+using VSpark.Services.Implementation;
 
 namespace VSpark;
 
@@ -54,6 +56,11 @@ public class Program
 
         builder.Services.Configure<JwtSettings>(jwtSettings);
 
+        // Заревьювить сроки жизни сервисов.
+        builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();
+        builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
+        builder.Services.AddSingleton<ITokenManager, TokenManager>();
+
         var app = builder.Build();
 
         if (app.Environment.IsDevelopment())
@@ -80,8 +87,6 @@ public class Program
             IDbContextFactory<SparkDbContext> dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SparkDbContext>>();
 
             using SparkDbContext dbContext = dbFactory.CreateDbContext();
-
-            dbContext.Database.EnsureDeleted();
 
             dbContext.Database.EnsureCreated();
         }

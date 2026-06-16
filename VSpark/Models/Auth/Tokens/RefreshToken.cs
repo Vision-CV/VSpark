@@ -1,10 +1,13 @@
-﻿namespace VSpark.Models.Auth.Tokens;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace VSpark.Models.Auth.Tokens;
 
 public class RefreshToken
 {
     public Guid Owner { get; set; }
 
-    public string Token { get; set; }
+    [Key]
+    public string? Token { get; set; }
 
     public string? Issuer { get; set; }
 

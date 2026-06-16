@@ -10,4 +10,6 @@ public interface ITokenManager
     public Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires);
 
     public Task CleanupRefreshTokenAsync(string token);
+
+    public Task CleanupRefreshTokenAsync(User owner);
 }

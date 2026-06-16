@@ -14,6 +14,7 @@ namespace VSpark.API.Controllers;
 public class MetricsController(IIncidentsRepository incidentsRepository, IHubContext<MetricsHub> hubContext) : ControllerBase
 {
     [HttpPost("send-incident")]
+    [EndpointDescription("Ожидает .jpg изображение в поле image")]
     public async Task<IActionResult> SendIncident([FromForm] string? incident, IFormFile? image)
     {
         if (incident == null)
@@ -78,5 +79,16 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
         await hubContext.Clients.All.SendAsync("OnIncidentDeleted", targetIncident);
 
         return Ok($"Incident {guid} was successfully deleted.");
+    }
+
+    [HttpPost("report-suspicious-activity")]
+    public async Task<IActionResult> ReportSuspiciousActivity([FromBody] SuspiciousActivityData? suspiciousActivityData)
+    {
+        if (suspiciousActivityData == null)
+            return BadRequest("Suspicious activity data was not received.");
+
+        await hubContext.Clients.Group("").SendAsync("CreateSuspiciousActivity", suspiciousActivityData);
+
+        return Ok();
     }
 }

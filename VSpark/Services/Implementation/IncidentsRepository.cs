@@ -10,14 +10,11 @@ public class IncidentsRepository : IIncidentsRepository
 {
     private IDbContextFactory<SparkDbContext> _dbFactory;
 
-    private IWebHostEnvironment _env;
-
     private string _artifactsFolder;
 
     public IncidentsRepository(IDbContextFactory<SparkDbContext> dbFactory, IWebHostEnvironment env)
     {
         _dbFactory = dbFactory;
-        _env = env;
 
         _artifactsFolder = Path.Combine(env.WebRootPath, "artifacts");
     }

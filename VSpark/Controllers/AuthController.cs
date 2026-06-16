@@ -10,6 +10,8 @@ using VSpark.Services;
 
 namespace VSpark.Controllers;
 
+using BCrypt = BCrypt.Net.BCrypt;
+
 [ApiController]
 [Route("auth")]
 public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenProvider) : ControllerBase
@@ -27,7 +29,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory
         if (targetUser == null)
             return Unauthorized();
 
-        if (!BCrypt.Net.BCrypt.Verify(authRequest.Password, targetUser.PasswordHash))
+        if (!BCrypt.Verify(authRequest.Password, targetUser.PasswordHash))
             return Unauthorized();
 
         RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays));
@@ -48,12 +50,40 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory
             MaxAge = TimeSpan.FromDays(jwtSettings.Value.RefreshTokenExpirationDays)
         };
 
-        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token, tokenCookieOptions);
+        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token!, tokenCookieOptions);
 
         return Ok(new { accessToken = newJwtToken });
     }
 
-    [HttpPost("renew")]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] AuthRequest? authRequest)
+    {
+        if (authRequest == null)
+            return BadRequest("Change password request data was not received.");
+
+        if (authRequest.NewPassword == null)
+            return BadRequest("No new password was found in the request.");
+
+        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+
+        User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == authRequest.Username);
+
+        if (targetUser == null)
+            return NotFound("User was not found.");
+
+        if (!BCrypt.Verify(authRequest.Password, targetUser.PasswordHash))
+            return Unauthorized("Old password is wrong.");
+
+        targetUser.PasswordHash = BCrypt.HashPassword(authRequest.NewPassword);
+
+        await dbContext.SaveChangesAsync();
+
+        await tokenProvider.CleanupRefreshTokenAsync(targetUser);
+
+        return Ok("Password was successfully changed.");
+    }
+
+    [HttpPost("renew-session")]
     public async Task<IActionResult> RenewSession()
     {
         if (!Request.Cookies.TryGetValue("Session-Refresh-Token", out string? refreshToken) || refreshToken == null)
@@ -68,7 +98,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory
 
         if (DateTime.UtcNow > targetToken.Expires)
         {
-            await tokenProvider.CleanupRefreshTokenAsync(targetToken.Token);
+            await tokenProvider.CleanupRefreshTokenAsync(targetToken.Token!);
 
             return Unauthorized("Your refresh token expired. Please login.");
         }
@@ -76,14 +106,14 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory
         User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.UserId == targetToken.Owner);
 
         if (targetUser == null)
-            return StatusCode(500, "We can't find any information about who you are. Did you registered? Please say that you do...");
+            return StatusCode(500, "We can't find any information about who you are. Did you register a new account? Please say that you do...");
 
         RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays));
 
         if (newRefreshToken == null)
             return StatusCode(500, "Failed to provide you a new refresh token. Please try again later or contact server administrator.");
 
-        await tokenProvider.CleanupRefreshTokenAsync(targetToken.Token);
+        await tokenProvider.CleanupRefreshTokenAsync(targetToken.Token!);
 
         string? newJwtToken = tokenProvider.CreateJwtToken(targetUser);
 
@@ -98,7 +128,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IDbContextFactory
             MaxAge = TimeSpan.FromDays(jwtSettings.Value.RefreshTokenExpirationDays)
         };
 
-        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token, tokenCookieOptions);
+        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token!, tokenCookieOptions);
 
         return Ok(newJwtToken);
     }
