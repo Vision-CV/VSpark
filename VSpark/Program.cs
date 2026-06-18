@@ -30,6 +30,7 @@ public class Program
         builder.Services.AddOpenApi();
 
         // Source of secret must be able to be reconfigurated.
+        var authSettings = builder.Configuration.GetSection("AuthSettings");
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
         var jwtSecret = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
 
@@ -55,6 +56,7 @@ public class Program
         });
 
         builder.Services.Configure<JwtSettings>(jwtSettings);
+        builder.Services.Configure<AuthSettings>(authSettings);
 
         // Заревьювить сроки жизни сервисов.
         builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();

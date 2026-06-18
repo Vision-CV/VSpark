@@ -14,7 +14,7 @@ namespace VSpark.API.Controllers;
 public class MetricsController(IIncidentsRepository incidentsRepository, IHubContext<MetricsHub> hubContext) : ControllerBase
 {
     [HttpPost("send-incident")]
-    [EndpointDescription("Ожидает .jpg изображение в поле image")]
+    [EndpointDescription("Отправка нового инцидента на сервер.")]
     public async Task<IActionResult> SendIncident([FromForm] string? incident, IFormFile? image)
     {
         if (incident == null)
@@ -46,6 +46,7 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
     }
     
     [HttpPatch("patch-incident")]
+    [EndpointDescription("Изменение существующего на сервере инцидента.")]
     public async Task<IActionResult> PatchIncident([FromBody] IncidentData? data)
     {
         if (data == null)
@@ -62,6 +63,7 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
     }
 
     [HttpDelete("delete-incident")]
+    [EndpointDescription("Удаление существующего на сервере инцидента.")]
     public async Task<IActionResult> DeleteIncident(string? guid)
     {
         if (guid == null)
@@ -82,6 +84,7 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
     }
 
     [HttpPost("report-suspicious-activity")]
+    [EndpointDescription("Создание уведомления о подозрительном поведении.")]
     public async Task<IActionResult> ReportSuspiciousActivity([FromBody] SuspiciousActivityData? suspiciousActivityData)
     {
         if (suspiciousActivityData == null)
