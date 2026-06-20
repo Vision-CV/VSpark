@@ -45,7 +45,7 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
     }
 
-    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires = jwtSettings.Value.RefreshTokenExpirationDays)
+    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires)
     {
         RefreshToken refreshToken = new();
         refreshToken.Owner = owner.UserId;

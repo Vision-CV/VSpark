@@ -60,8 +60,10 @@ public class Program
 
         // Заревьювить сроки жизни сервисов.
         builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();
-        builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
+        //builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
         builder.Services.AddSingleton<ITokenManager, TokenManager>();
+
+        builder.Logging.AddConsole();
 
         var app = builder.Build();
 
@@ -89,6 +91,10 @@ public class Program
             IDbContextFactory<SparkDbContext> dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SparkDbContext>>();
 
             using SparkDbContext dbContext = dbFactory.CreateDbContext();
+
+            ILogger logger = scope.ServiceProvider.GetRequiredService<ILogger>();
+
+            logger.LogError("developer eblan");
 
             dbContext.Database.EnsureCreated();
         }
