@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS builder
 WORKDIR src
 COPY VSpark.csproj ./VSpark
-RUN dotnet restore ./VSpark.csproj
+RUN dotnet restore ./VSpark/VSpark.csproj
 COPY . .
 RUN dotnet publish -c Debug -o /app/publish
 
