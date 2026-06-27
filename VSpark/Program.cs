@@ -74,6 +74,8 @@ public class Program
             app.MapScalarApiReference();
         }
 
+        app.UseCors();
+
         app.UseHttpsRedirection();
 
         app.UseAuthentication();
@@ -91,10 +93,6 @@ public class Program
             IDbContextFactory<SparkDbContext> dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SparkDbContext>>();
 
             using SparkDbContext dbContext = dbFactory.CreateDbContext();
-
-            ILogger logger = scope.ServiceProvider.GetRequiredService<ILogger>();
-
-            logger.LogError("developer eblan");
 
             dbContext.Database.EnsureCreated();
         }
