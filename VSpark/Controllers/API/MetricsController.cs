@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
@@ -9,10 +10,12 @@ using VSpark.Services;
 
 namespace VSpark.API.Controllers;
 
+[Authorize(AuthenticationSchemes = "Bearer,X-API")]
 [ApiController]
 [Route("api/[controller]")]
 public class MetricsController(IIncidentsRepository incidentsRepository, IHubContext<MetricsHub> hubContext) : ControllerBase
 {
+    [Authorize(Roles = "SA")]
     [HttpPost("send-incident")]
     [EndpointDescription("Отправка нового инцидента на сервер.")]
     public async Task<IActionResult> SendIncident([FromForm] string? incident, IFormFile? image)
@@ -44,7 +47,8 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
         
         return Ok($"Incident successfully saved by {incidentData.Guid}");
     }
-    
+
+    [Authorize(Roles = "SA")]
     [HttpPatch("patch-incident")]
     [EndpointDescription("Изменение существующего на сервере инцидента.")]
     public async Task<IActionResult> PatchIncident([FromBody] IncidentData? data)
@@ -62,6 +66,7 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
         return Ok($"Incident {guid} successfully updated.");
     }
 
+    [Authorize(Roles = "SA")]
     [HttpDelete("delete-incident")]
     [EndpointDescription("Удаление существующего на сервере инцидента.")]
     public async Task<IActionResult> DeleteIncident(string? guid)
@@ -83,6 +88,7 @@ public class MetricsController(IIncidentsRepository incidentsRepository, IHubCon
         return Ok($"Incident {guid} was successfully deleted.");
     }
 
+    [Authorize(Roles = "SA")]
     [HttpPost("report-suspicious-activity")]
     [EndpointDescription("Создание уведомления о подозрительном поведении.")]
     public async Task<IActionResult> ReportSuspiciousActivity([FromBody] SuspiciousActivityData? suspiciousActivityData)

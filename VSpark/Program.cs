@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -5,6 +6,8 @@ using Scalar.AspNetCore;
 
 using System.Text;
 
+using VSpark.Auth;
+using VSpark.Auth.Configs;
 using VSpark.Data;
 using VSpark.Hubs;
 using VSpark.Models.Config;
@@ -34,26 +37,28 @@ public class Program
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
         var jwtSecret = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
 
-        builder.Services.AddAuthentication().AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
+        builder.Services.AddAuthentication(options => options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme)
+            .AddScheme<ApiKeySchemeOptions, ApiKeyHandler>("X-API", options => { })
+            .AddJwtBearer(options =>
             {
-                ValidateIssuer = true,
-                ValidIssuer = "visdash",
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = "visdash",
 
-                ValidateAudience = true,
-                ValidAudience = "visdash_client",
+                    ValidateAudience = true,
+                    ValidAudience = "visdash_client",
 
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(jwtSecret),
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(jwtSecret),
 
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(5),
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.FromMinutes(5),
 
-                NameClaimType = "username",
-                RoleClaimType = "role"
-            };
-        });
+                    NameClaimType = "username",
+                    RoleClaimType = "role"
+                };
+            });
 
         builder.Services.Configure<JwtSettings>(jwtSettings);
         builder.Services.Configure<AuthSettings>(authSettings);
