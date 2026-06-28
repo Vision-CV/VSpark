@@ -45,11 +45,10 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
     }
 
-    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires)
+    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime tokenExpires, string tokenDeviceId)
     {
-        RefreshToken refreshToken = new();
+        RefreshToken refreshToken = new() { Expires = tokenExpires, DeviceId = tokenDeviceId };
         refreshToken.Owner = owner.UserId;
-        refreshToken.Expires = expires;
         refreshToken.Issuer = jwtSettings.Value.Issuer;
         refreshToken.Audience = jwtSettings.Value.Audience;
 
@@ -62,15 +61,19 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
 
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        if (dbContext.RefreshTokens.Any(x => x.Owner == owner.UserId))
-            return null;
+        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.DeviceId == refreshToken.DeviceId);
 
-        dbContext.RefreshTokens.Add(refreshToken);
+        if (targetToken != null)
+            dbContext.RefreshTokens.Remove(targetToken);
+
+        await dbContext.RefreshTokens.AddAsync(refreshToken);
+
+        await dbContext.SaveChangesAsync();
 
         return refreshToken;
     }
 
-    public async Task CleanupRefreshTokenAsync(string token)
+    public async Task DisposeRefreshTokenAsync(string token)
     {
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
@@ -82,15 +85,18 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         dbContext.RefreshTokens.Remove(targetToken);
     }
 
-    public async Task CleanupRefreshTokenAsync(User owner)
+    public async Task CleanupRefreshTokensAsync(User owner)
     {
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Owner == owner.UserId);
+        IEnumerable<RefreshToken>? targetTokens = dbContext.RefreshTokens.Where(x => x.Owner == owner.UserId);
 
-        if (targetToken == null)
+        if (targetTokens == null)
             return;
 
-        dbContext.RefreshTokens.Remove(targetToken);
+        foreach (RefreshToken token in targetTokens)
+            dbContext.RefreshTokens.Remove(token);
+
+        await dbContext.SaveChangesAsync();
     }
 }

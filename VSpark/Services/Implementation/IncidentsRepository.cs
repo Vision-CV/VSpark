@@ -16,7 +16,7 @@ public class IncidentsRepository : IIncidentsRepository
     {
         _dbFactory = dbFactory;
 
-        _artifactsFolder = Path.Combine(env.WebRootPath, "artifacts");
+        _artifactsFolder = Path.Combine("/app/wwwroot/artifacts", "artifacts");
     }
 
     public async Task<IncidentData?> TryGetIncidentAsync(string guid)

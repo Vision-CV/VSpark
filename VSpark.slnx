@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
   <Project Path="D:/Github/Orgs/DreamTeam/VSpark/VSpark.Tests/VSpark.Tests.csproj" Id="5a0ad9b7-ecd8-404f-9e01-b629af53ce87" />
   <Project Path="D:/Github/Orgs/DreamTeam/VSpark/VSpark/VSpark.csproj" />
 </Solution>

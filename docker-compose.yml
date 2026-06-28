@@ -1,0 +1,14 @@
+services:
+  vspark:
+    image: vspark:1.0pa
+    container_name: vspark
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - /home/vdata/vspark/db:/app/data
+      - /home/vdata/vspark/artifacts:/app/wwwroot/artifacts
+
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development

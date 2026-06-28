@@ -19,7 +19,7 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        string dbSource = $"Data Source={Path.Combine(AppContext.BaseDirectory, "SparkData.db")}";
+        string dbSource = $"Data Source={Path.Combine("/app/data", "SparkData.db")}";
 
         builder.Services.AddDbContextFactory<SparkDbContext>(options => options.UseSqlite(dbSource));
 
