@@ -67,6 +67,7 @@ public class Program
         builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();
         //builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
         builder.Services.AddSingleton<ITokenManager, TokenManager>();
+        builder.Services.AddSingleton<IApiTokenManager, ApiTokenManager>();
 
         builder.Logging.AddConsole();
 
