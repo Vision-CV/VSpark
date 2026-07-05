@@ -14,9 +14,7 @@ public class SuspectsRepository(IAuditor auditor) : ISuspectsRepository
             return false;
 
         if (shouldBeSaved)
-        {
             await auditor.SaveSuspectAsync();
-        }
 
         return true;
     }

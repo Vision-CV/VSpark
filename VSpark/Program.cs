@@ -32,7 +32,7 @@ public class Program
 
         builder.Services.AddOpenApi();
 
-        // Source of secret must be able to be reconfigurated.
+        // Источники секретов должны быть настраиваемыми
         var authSettings = builder.Configuration.GetSection("AuthSettings");
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
         var jwtSecret = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
