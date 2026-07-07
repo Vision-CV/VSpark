@@ -117,7 +117,7 @@ public class IncidentsRepository : IIncidentsRepository
     {
         using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
 
-        if (await metricsDbContext.Incidents.AnyAsync(x => x.Guid == incident.Guid)) 
+        if (await metricsDbContext.Incidents.AnyAsync(x => x.Guid == incident.Guid))
             return false;
 
         await metricsDbContext.Incidents.AddAsync(incident);
