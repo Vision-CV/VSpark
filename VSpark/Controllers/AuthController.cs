@@ -1,6 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -36,7 +34,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
 
         DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
 
-        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires, authRequest.DeviceId);
+        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires);
 
         if (newRefreshToken == null || newRefreshToken.Token == null)
             return StatusCode(500, "Failed to provide you a new refresh token. Please try again later or contact server administrator.");
@@ -76,7 +74,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
 
         DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
 
-        RefreshToken? refreshToken = await tokenProvider.CreateRefreshTokenAsync(newUser, refreshTokenExpires, regRequest.DeviceId);
+        RefreshToken? refreshToken = await tokenProvider.CreateRefreshTokenAsync(newUser, refreshTokenExpires);
 
         if (refreshToken == null || refreshToken.Token == null)
             return StatusCode(500, "Refresh token creation failed.");
@@ -86,7 +84,24 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
         return Ok(new { accessToken = jwtToken, refreshExpires = refreshTokenExpires });
     }
 
-    [HttpPost("change-password")]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        if (!Request.Cookies.TryGetValue("Session-Refresh-Token", out string? executorRefreshToken))
+            return Unauthorized();
+
+        if (executorRefreshToken == null)
+            return BadRequest("Refresh token is null.");
+
+        if (!await tokenProvider.TryRevokeRefreshTokenAsync(executorRefreshToken))
+            return NotFound("There's no active sessions associated with your current refresh token.");
+
+        Response.Cookies.Delete("Session-Refresh-Token");
+
+        return Ok("Successful logout.");
+    }
+
+    [HttpPatch("change-password")]
     public async Task<IActionResult> ChangePassword([FromBody] AuthRequest? authRequest)
     {
         if (authRequest == null)
@@ -129,7 +144,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
 
         if (DateTime.UtcNow > targetToken.Expires)
         {
-            await tokenProvider.DisposeRefreshTokenAsync(targetToken.Token!);
+            await tokenProvider.TryRevokeRefreshTokenAsync(targetToken.Token!);
 
             return Unauthorized("Your refresh token expired. Please login.");
         }
@@ -141,12 +156,12 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
 
         DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
 
-        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires, targetToken.DeviceId);
+        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires);
 
         if (newRefreshToken == null || newRefreshToken.Token == null)
             return StatusCode(500, "Failed to provide you a new refresh token. Please try again later or contact server administrator.");
 
-        await tokenProvider.DisposeRefreshTokenAsync(targetToken.Token!);
+        await tokenProvider.TryRevokeRefreshTokenAsync(targetToken.Token!);
 
         string? newJwtToken = tokenProvider.CreateJwtToken(targetUser);
 

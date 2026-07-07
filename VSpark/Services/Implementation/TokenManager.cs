@@ -45,9 +45,9 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
     }
 
-    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime tokenExpires, string tokenDeviceId)
+    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime tokenExpires)
     {
-        RefreshToken refreshToken = new() { Expires = tokenExpires, DeviceId = tokenDeviceId };
+        RefreshToken refreshToken = new() { Expires = tokenExpires, SessionId = Guid.NewGuid() };
         refreshToken.Owner = owner.UserId;
         refreshToken.Issuer = jwtSettings.Value.Issuer;
         refreshToken.Audience = jwtSettings.Value.Audience;
@@ -61,7 +61,7 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
 
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.DeviceId == refreshToken.DeviceId);
+        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.SessionId == refreshToken.SessionId);
 
         if (targetToken != null)
             dbContext.RefreshTokens.Remove(targetToken);
@@ -73,16 +73,20 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         return refreshToken;
     }
 
-    public async Task DisposeRefreshTokenAsync(string token)
+    public async Task<bool> TryRevokeRefreshTokenAsync(string token)
     {
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
         RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == token);
 
         if (targetToken == null)
-            return;
+            return false;
 
         dbContext.RefreshTokens.Remove(targetToken);
+
+        await dbContext.SaveChangesAsync();
+
+        return true;
     }
 
     public async Task CleanupRefreshTokensAsync(User owner)

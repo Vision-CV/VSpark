@@ -26,9 +26,15 @@ public class IncidentsRepository : IIncidentsRepository
         if (!Guid.TryParse(guid, out Guid targetGuid))
             return null;
 
-        IncidentData? targetIncident = metricsDbContext.Incidents.FirstOrDefault(x => x.Guid == targetGuid);
+        return await metricsDbContext.Incidents.FirstOrDefaultAsync(x => x.Guid == targetGuid);
+    }
 
-        return targetIncident;
+    public async Task<IncidentData?> TryGetIncidentAsync(string guid, SparkDbContext dbContext)
+    {
+        if (!Guid.TryParse(guid, out Guid targetGuid))
+            return null;
+
+        return await dbContext.Incidents.FirstOrDefaultAsync(x => x.Guid == targetGuid);
     }
 
     public async Task<bool> TrySaveIncidentAsync(IncidentData incident, byte[] artifact)
@@ -50,29 +56,28 @@ public class IncidentsRepository : IIncidentsRepository
 
     public async Task<bool> TryUpdateIncidentAsync(string guid, IncidentData newData)
     {
-        IncidentData? targetIncident = await TryGetIncidentAsync(guid);
+        using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
+
+        IncidentData? targetIncident = await TryGetIncidentAsync(guid, metricsDbContext);
 
         if (targetIncident == null)
             return false;
 
         targetIncident.MergeWith(newData);
 
-        using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
-
         await metricsDbContext.SaveChangesAsync();
 
         return true;
     }
 
-    // Double db context creation.
     public async Task<bool> TryDeleteIncidentAsync(string guid)
     {
-        IncidentData? targetIncident = await TryGetIncidentAsync(guid);
+        using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
+
+        IncidentData? targetIncident = await TryGetIncidentAsync(guid, metricsDbContext);
 
         if (targetIncident == null)
             return false;
-
-        using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
 
         metricsDbContext.Remove(targetIncident);
 
@@ -110,12 +115,12 @@ public class IncidentsRepository : IIncidentsRepository
 
     private async Task<bool> TryAddIncident(IncidentData incident)
     {
-        using SparkDbContext _metricsDbContext = await _dbFactory.CreateDbContextAsync();
+        using SparkDbContext metricsDbContext = await _dbFactory.CreateDbContextAsync();
 
-        if (await _metricsDbContext.Incidents.AnyAsync(x => x.Guid == incident.Guid))
+        if (await metricsDbContext.Incidents.AnyAsync(x => x.Guid == incident.Guid)) 
             return false;
 
-        await _metricsDbContext.Incidents.AddAsync(incident);
+        await metricsDbContext.Incidents.AddAsync(incident);
 
         return true;
     }

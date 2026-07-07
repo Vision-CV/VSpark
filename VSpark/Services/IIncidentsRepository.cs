@@ -1,10 +1,13 @@
-﻿using VSpark.Models.Data;
+﻿using VSpark.Data;
+using VSpark.Models.Data;
 
 namespace VSpark.Services;
 
 public interface IIncidentsRepository
 {
     public Task<IncidentData?> TryGetIncidentAsync(string guid);
+
+    public Task<IncidentData?> TryGetIncidentAsync(string guid, SparkDbContext dbContext);
 
     public Task<bool> TrySaveIncidentAsync(IncidentData incident, byte[] artifact);
 

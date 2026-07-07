@@ -11,9 +11,6 @@ public class RegRequest
     public required string Name { get; set; }
 
     [Required]
-    public required string DeviceId { get; set; }
-
-    [Required]
     public required string Surname { get; set; }
 
     [Required]

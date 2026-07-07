@@ -11,7 +11,7 @@ public class RefreshToken
 
     public string? Issuer { get; set; }
 
-    public required string DeviceId { get; set; }
+    public required Guid SessionId { get; set; }
 
     public string? Audience { get; set; }
 
