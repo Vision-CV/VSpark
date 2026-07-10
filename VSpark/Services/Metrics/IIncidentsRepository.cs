@@ -1,7 +1,7 @@
-﻿using VSpark.Data;
-using VSpark.Models.Data;
+﻿using VSpark.Models.Data;
+using VSpark.Persistence;
 
-namespace VSpark.Services;
+namespace VSpark.Services.Metrics;
 
 public interface IIncidentsRepository
 {

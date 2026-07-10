@@ -4,7 +4,7 @@ using VSpark.Models.Data;
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
 
-namespace VSpark.Data;
+namespace VSpark.Persistence;
 
 public class SparkDbContext(DbContextOptions<SparkDbContext> options) : DbContext(options)
 {

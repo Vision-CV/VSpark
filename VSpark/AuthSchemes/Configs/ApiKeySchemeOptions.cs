@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 
-namespace VSpark.Auth.Configs;
+namespace VSpark.AuthSchemes.Configs;
 
 public class ApiKeySchemeOptions : AuthenticationSchemeOptions
 {

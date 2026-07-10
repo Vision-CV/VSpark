@@ -4,10 +4,10 @@ using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
-using VSpark.Auth.Configs;
-using VSpark.Services;
+using VSpark.AuthSchemes.Configs;
+using VSpark.Services.Auth;
 
-namespace VSpark.Auth;
+namespace VSpark.AuthSchemes;
 
 public class ApiKeyHandler : AuthenticationHandler<ApiKeySchemeOptions>
 {

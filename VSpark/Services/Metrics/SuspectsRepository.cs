@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
-
 using VSpark.Models.Data;
+using VSpark.Services.Audit;
 
-namespace VSpark.Services.Implementation;
+namespace VSpark.Services.Metrics;
 
 public class SuspectsRepository(IAuditor auditor) : ISuspectsRepository
 {

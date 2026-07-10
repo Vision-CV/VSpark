@@ -1,7 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-
-using VSpark.Enums;
+using VSpark.Models.Enums;
 
 namespace VSpark.Models.Data;
 

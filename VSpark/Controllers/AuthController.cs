@@ -1,12 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-
-using VSpark.Data;
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
 using VSpark.Models.Config;
-using VSpark.Services;
+using VSpark.Persistence;
+using VSpark.Services.Auth;
 
 namespace VSpark.Controllers;
 

@@ -1,6 +1,6 @@
 ﻿using VSpark.Models.Data;
 
-namespace VSpark.Services;
+namespace VSpark.Services.Metrics;
 
 public interface ISuspectsRepository
 {

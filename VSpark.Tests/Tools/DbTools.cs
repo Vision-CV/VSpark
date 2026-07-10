@@ -1,8 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
 using Moq;
-
-using VSpark.Data;
+using VSpark.Persistence;
 
 namespace VSpark.Tests.Tools;
 

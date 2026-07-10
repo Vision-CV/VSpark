@@ -6,13 +6,12 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-
-using VSpark.Data;
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
 using VSpark.Models.Config;
+using VSpark.Persistence;
 
-namespace VSpark.Services.Implementation;
+namespace VSpark.Services.Auth;
 
 public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<SparkDbContext> dbFactory) : ITokenManager
 {

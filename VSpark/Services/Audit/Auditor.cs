@@ -1,4 +1,4 @@
-﻿namespace VSpark.Services.Implementation;
+﻿namespace VSpark.Services.Audit;
 
 public class Auditor : IAuditor
 {

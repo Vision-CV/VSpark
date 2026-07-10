@@ -1,4 +1,4 @@
-﻿namespace VSpark.Services;
+﻿namespace VSpark.Services.Auth;
 
 public interface IApiTokenManager
 {

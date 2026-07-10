@@ -1,4 +1,4 @@
-﻿namespace VSpark.Enums;
+﻿namespace VSpark.Models.Enums;
 
 public enum IncidentType
 {

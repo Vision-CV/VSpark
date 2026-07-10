@@ -4,8 +4,7 @@ using System.IdentityModel.Tokens.Jwt;
 
 using VSpark.Models.Auth;
 using VSpark.Models.Config;
-using VSpark.Services.Implementation;
-
+using VSpark.Services.Auth;
 using VSpark.Tests.Tools;
 
 namespace VSpark.Tests;

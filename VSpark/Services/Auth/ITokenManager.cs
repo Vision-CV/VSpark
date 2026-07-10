@@ -1,7 +1,7 @@
 ﻿using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
 
-namespace VSpark.Services;
+namespace VSpark.Services.Auth;
 
 public interface ITokenManager
 {

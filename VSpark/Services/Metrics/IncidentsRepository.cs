@@ -1,10 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
-
-using VSpark.Data;
 using VSpark.Models.Data;
 using VSpark.Models.Extensions;
+using VSpark.Persistence;
 
-namespace VSpark.Services.Implementation;
+namespace VSpark.Services.Metrics;
 
 public class IncidentsRepository : IIncidentsRepository
 {

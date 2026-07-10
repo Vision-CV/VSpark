@@ -6,13 +6,13 @@ using Scalar.AspNetCore;
 
 using System.Text;
 
-using VSpark.Auth;
-using VSpark.Auth.Configs;
-using VSpark.Data;
+using VSpark.AuthSchemes;
+using VSpark.AuthSchemes.Configs;
 using VSpark.Hubs;
 using VSpark.Models.Config;
-using VSpark.Services;
-using VSpark.Services.Implementation;
+using VSpark.Persistence;
+using VSpark.Services.Auth;
+using VSpark.Services.Metrics;
 
 namespace VSpark;
 
