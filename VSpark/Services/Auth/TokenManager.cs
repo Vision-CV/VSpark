@@ -44,19 +44,19 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
         return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
     }
 
-    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime tokenExpires)
+    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner)
     {
-        RefreshToken refreshToken = new() { Expires = tokenExpires, SessionId = Guid.NewGuid() };
-        refreshToken.Owner = owner.UserId;
-        refreshToken.Issuer = jwtSettings.Value.Issuer;
-        refreshToken.Audience = jwtSettings.Value.Audience;
-
         byte[] rns = new byte[32];
 
         using RandomNumberGenerator rng = RandomNumberGenerator.Create();
         rng.GetBytes(rns, 0, 32);
 
-        refreshToken.Token = Convert.ToBase64String(rns);
+        string token = Convert.ToBase64String(rns);
+
+        RefreshToken refreshToken = new() { Expires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays), SessionId = Guid.NewGuid(), Token = token };
+        refreshToken.Owner = owner.UserId;
+        refreshToken.Issuer = jwtSettings.Value.Issuer;
+        refreshToken.Audience = jwtSettings.Value.Audience;
 
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 

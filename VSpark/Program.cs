@@ -12,6 +12,7 @@ using VSpark.Hubs;
 using VSpark.Models.Config;
 using VSpark.Persistence;
 using VSpark.Services.Auth;
+using VSpark.Services.Background;
 using VSpark.Services.Metrics;
 
 namespace VSpark;
@@ -68,6 +69,10 @@ public class Program
         //builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
         builder.Services.AddSingleton<ITokenManager, TokenManager>();
         builder.Services.AddSingleton<IApiTokenManager, ApiTokenManager>();
+
+        builder.Services.AddScoped<IAuthService, AuthService>();
+
+        builder.Services.AddHostedService<RefreshCleanupWorker>();
 
         builder.Logging.AddConsole();
 

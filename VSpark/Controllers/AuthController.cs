@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+
+using System.Net;
+
 using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
 using VSpark.Models.Config;
-using VSpark.Persistence;
 using VSpark.Services.Auth;
 
 namespace VSpark.Controllers;
@@ -13,39 +13,25 @@ using BCrypt = BCrypt.Net.BCrypt;
 
 [ApiController]
 [Route("auth")]
-public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenProvider) : ControllerBase
+public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService authService) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] AuthRequest? authRequest)
     {
         if (authRequest == null)
-            return BadRequest("No login data was received.");
+            return BadRequest("Failed to receive");
 
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        AuthResponse loginResponse = await authService.TryLoginAsync(authRequest);
 
-        User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == authRequest.Username);
+        if (loginResponse.IsFailed)
+            return StatusCode((int)loginResponse.StatusCode);
 
-        if (targetUser == null)
-            return Unauthorized();
+        if (loginResponse.Cookies == null || !loginResponse.Cookies.TryGetValue("Session-Refresh-Token", out string? refreshToken))
+            return StatusCode((int)HttpStatusCode.InternalServerError, "There's a problem with creating a new session. Try again.");
 
-        if (!BCrypt.Verify(authRequest.Password, targetUser.PasswordHash))
-            return Unauthorized();
+        Response.Cookies.Append("Session-Refresh-Token", refreshToken, GetRefreshTokenCookieOptions());
 
-        DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
-
-        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires);
-
-        if (newRefreshToken == null || newRefreshToken.Token == null)
-            return StatusCode(500, "Failed to provide you a new refresh token. Please try again later or contact server administrator.");
-
-        string? newJwtToken = tokenProvider.CreateJwtToken(targetUser);
-
-        if (newJwtToken == null)
-            return StatusCode(500, "Failed to provide you a new jwt token. Please try again later or contact server administrator.");
-
-        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token, GetRefreshTokenCookieOptions());
-
-        return Ok(new { accessToken = newJwtToken, refreshExpires = refreshTokenExpires });
+        return Ok(loginResponse.Body);
     }
 
     [HttpPost("register")]
@@ -54,33 +40,20 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
         if (regRequest == null)
             return BadRequest("Bad request data.");
 
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        AuthResponse? regResponse = await authService.TryRegisterAsync(regRequest);
 
-        if (await dbContext.Users.AnyAsync(x => x.Username == regRequest.Username))
-            return Conflict("User with the same username is already registered.");
+        if (regResponse == null)
+            return StatusCode(500, "We've failed to receive an answer from auth service. Please contact service administrator or try again.");
 
-        User newUser = new User { Username = regRequest.Username, FirstName = regRequest.Name, SecondName = regRequest.Surname, UserId = Guid.NewGuid(), Role = authSettings.Value.DefaultRole };
-        newUser.PasswordHash = BCrypt.HashPassword(regRequest.Password);
+        if (regResponse.IsFailed)
+            return StatusCode((int)regResponse.StatusCode, regResponse.Message);
 
-        dbContext.Users.Add(newUser);
+        if (regResponse.Cookies == null || !regResponse.Cookies.TryGetValue("Session-Refresh-Token", out string? refreshToken))
+            return StatusCode(500, "We've failed to receive your session's data. Please try again.");
 
-        await dbContext.SaveChangesAsync();
+        Response.Cookies.Append("Session-Refresh-Token", refreshToken, GetRefreshTokenCookieOptions());
 
-        string? jwtToken = tokenProvider.CreateJwtToken(newUser);
-
-        if (jwtToken == null)
-            return StatusCode(500, "JWT creation failed.");
-
-        DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
-
-        RefreshToken? refreshToken = await tokenProvider.CreateRefreshTokenAsync(newUser, refreshTokenExpires);
-
-        if (refreshToken == null || refreshToken.Token == null)
-            return StatusCode(500, "Refresh token creation failed.");
-
-        Response.Cookies.Append("Session-Refresh-Token", refreshToken.Token, GetRefreshTokenCookieOptions());
-
-        return Ok(new { accessToken = jwtToken, refreshExpires = refreshTokenExpires });
+        return Ok(regResponse.Body);
     }
 
     [HttpPost("logout")]
@@ -89,11 +62,13 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
         if (!Request.Cookies.TryGetValue("Session-Refresh-Token", out string? executorRefreshToken))
             return Unauthorized();
 
-        if (executorRefreshToken == null)
-            return BadRequest("Refresh token is null.");
+        if (string.IsNullOrEmpty(executorRefreshToken))
+            return BadRequest("Failed to read your refresh token");
 
-        if (!await tokenProvider.TryRevokeRefreshTokenAsync(executorRefreshToken))
-            return NotFound("There's no active sessions associated with your current refresh token.");
+        AuthResponse logoutResponse = await authService.TryLogoutAsync(executorRefreshToken);
+
+        if (logoutResponse.IsFailed)
+            return StatusCode((int)logoutResponse.StatusCode, logoutResponse.Message);
 
         Response.Cookies.Delete("Session-Refresh-Token");
 
@@ -109,23 +84,15 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
         if (string.IsNullOrWhiteSpace(authRequest.NewPassword))
             return BadRequest("No new password was found in the request.");
 
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        if (!Request.Cookies.TryGetValue("Session-Refresh-Token", out string? refreshToken))
+            return Unauthorized("Failed to read your refresh token.");
 
-        User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == authRequest.Username);
+        AuthResponse changeResponse = await authService.TryChangePasswordAsync(authRequest, refreshToken);
 
-        if (targetUser == null)
-            return NotFound("User was not found.");
+        if (changeResponse.IsFailed)
+            return StatusCode((int)changeResponse.StatusCode, changeResponse.Message);
 
-        if (!BCrypt.Verify(authRequest.Password, targetUser.PasswordHash))
-            return Unauthorized("Old password is wrong.");
-
-        targetUser.PasswordHash = BCrypt.HashPassword(authRequest.NewPassword);
-
-        await dbContext.SaveChangesAsync();
-
-        await tokenProvider.CleanupRefreshTokensAsync(targetUser);
-
-        return Ok(new { message = "Password was successfully changed." });
+        return Ok(changeResponse.Message);
     }
 
     [HttpPost("renew-session")]
@@ -134,42 +101,17 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IOptions<AuthSett
         if (!Request.Cookies.TryGetValue("Session-Refresh-Token", out string? refreshToken) || refreshToken == null)
             return Unauthorized("You're not authorized.");
 
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        AuthResponse renewResponse = await authService.TryRenewSessionAsync(refreshToken);
 
-        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == refreshToken);
+        if (renewResponse.IsFailed)
+            return StatusCode((int)renewResponse.StatusCode, renewResponse.Message);
 
-        if (targetToken == null)
-            return Unauthorized("Your refresh token was not found. Please authorize first.");
+        if (renewResponse.Cookies == null || !renewResponse.Cookies.TryGetValue("Session-Refresh-Token", out string? newRefresh))
+            return StatusCode(500, "We've failed to receive your session's data. Please try again.");
 
-        if (DateTime.UtcNow > targetToken.Expires)
-        {
-            await tokenProvider.TryRevokeRefreshTokenAsync(targetToken.Token!);
+        Response.Cookies.Append("Session-Refresh-Token", newRefresh, GetRefreshTokenCookieOptions());
 
-            return Unauthorized("Your refresh token expired. Please login.");
-        }
-
-        User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.UserId == targetToken.Owner);
-
-        if (targetUser == null)
-            return StatusCode(500, "We can't find any information about who you are. Did you register a new account? Please say that you do...");
-
-        DateTime refreshTokenExpires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays);
-
-        RefreshToken? newRefreshToken = await tokenProvider.CreateRefreshTokenAsync(targetUser, refreshTokenExpires);
-
-        if (newRefreshToken == null || newRefreshToken.Token == null)
-            return StatusCode(500, "Failed to provide you a new refresh token. Please try again later or contact server administrator.");
-
-        await tokenProvider.TryRevokeRefreshTokenAsync(targetToken.Token!);
-
-        string? newJwtToken = tokenProvider.CreateJwtToken(targetUser);
-
-        if (newJwtToken == null)
-            return StatusCode(500, "Failed to provide you a new jwt token. Please try again later or contact server administrator.");
-
-        Response.Cookies.Append("Session-Refresh-Token", newRefreshToken.Token, GetRefreshTokenCookieOptions());
-
-        return Ok(new { accessToken = newJwtToken, refreshExpires = refreshTokenExpires });
+        return Ok(renewResponse.Body);
     }
 
     private CookieOptions GetRefreshTokenCookieOptions() => new CookieOptions

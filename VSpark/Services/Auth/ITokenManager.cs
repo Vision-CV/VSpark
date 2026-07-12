@@ -7,7 +7,7 @@ public interface ITokenManager
 {
     public string? CreateJwtToken(User owner);
 
-    public Task<RefreshToken?> CreateRefreshTokenAsync(User owner, DateTime expires);
+    public Task<RefreshToken?> CreateRefreshTokenAsync(User owner);
 
     public Task<bool> TryRevokeRefreshTokenAsync(string token);
 

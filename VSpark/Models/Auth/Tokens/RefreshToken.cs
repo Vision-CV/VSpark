@@ -7,7 +7,7 @@ public class RefreshToken
     public Guid Owner { get; set; }
 
     [Key]
-    public string? Token { get; set; }
+    public required string Token { get; set; }
 
     public string? Issuer { get; set; }
 
