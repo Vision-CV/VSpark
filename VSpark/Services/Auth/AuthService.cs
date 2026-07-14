@@ -12,7 +12,7 @@ using static BCrypt.Net.BCrypt;
 
 namespace VSpark.Services.Auth;
 
-public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenManager, ILogger logger) : IAuthService
+public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenManager, ILogger<AuthService> logger) : IAuthService
 {
     public async Task<AuthResponse> TryLoginAsync(AuthRequest request)
     {

@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
+using Npgsql;
+
 using Scalar.AspNetCore;
 
 using System.Text;
@@ -23,9 +25,18 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        string dbSource = $"Data Source={Path.Combine("/app/data", "SparkData.db")}";
+        var connectionSettings = builder.Configuration.GetSection("DbConnection");
 
-        builder.Services.AddDbContextFactory<SparkDbContext>(options => options.UseSqlite(dbSource));
+        NpgsqlConnectionStringBuilder connectionStringBuilder = new NpgsqlConnectionStringBuilder
+        {
+            Host = connectionSettings["Host"],
+            Port = connectionSettings.GetValue<int>("Port"),
+            Database = connectionSettings["Database"],
+            Username = connectionSettings["Username"],
+            Password = connectionSettings["Password"]
+        };
+
+        builder.Services.AddDbContextFactory<SparkDbContext>(options => options.UseNpgsql(connectionStringBuilder.ConnectionString));
 
         builder.Services.AddControllers();
 
@@ -98,15 +109,6 @@ public class Program
         app.UseStaticFiles();
 
         app.MapHub<MetricsHub>("/metricsHub");
-
-        using (var scope = app.Services.CreateScope())
-        {
-            IDbContextFactory<SparkDbContext> dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SparkDbContext>>();
-
-            using SparkDbContext dbContext = dbFactory.CreateDbContext();
-
-            dbContext.Database.EnsureCreated();
-        }
 
         app.Run();
     }

@@ -7,8 +7,25 @@ services:
       - "8080:8080"
 
     volumes:
-      - /home/vdata/vspark/db:/app/data
       - /home/vdata/vspark/artifacts:/app/wwwroot/artifacts
 
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+
+    depends_on: 
+      - database
+
+  database:
+    image: postgres:17
+    container_name: vspark_postgres
+
+    ports:
+      - "5432:5432"
+ 
+    volumes:
+      - /home/vdata/postgre_data:/var/lib/postgresql/data
+
+    environment:
+      - POSTGRES_DB=vspark
+      - POSTGRES_USER=spark
+      - POSTGRES_PASSWORD=vsparkdbpass
