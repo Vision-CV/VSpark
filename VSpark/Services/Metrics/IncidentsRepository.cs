@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+
 using VSpark.Models.Data;
 using VSpark.Models.Extensions;
 using VSpark.Persistence;

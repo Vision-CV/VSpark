@@ -9,8 +9,6 @@ using VSpark.Services.Auth;
 
 namespace VSpark.Controllers;
 
-using BCrypt = BCrypt.Net.BCrypt;
-
 [ApiController]
 [Route("auth")]
 public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService authService) : ControllerBase
@@ -21,6 +19,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
         if (authRequest == null)
             return BadRequest("Failed to receive");
 
+        // Почему без nullable?
         AuthResponse loginResponse = await authService.TryLoginAsync(authRequest);
 
         if (loginResponse.IsFailed)

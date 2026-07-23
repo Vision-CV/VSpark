@@ -1,6 +1,6 @@
 ﻿namespace VSpark.Services.Tourniquets;
 
-public interface ITourniquetManager
+public interface ICheckpointManager
 {
     public Task<bool> RequestUnlock(int id);
 
