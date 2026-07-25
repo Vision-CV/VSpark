@@ -19,7 +19,6 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
         if (authRequest == null)
             return BadRequest("Failed to receive");
 
-        // Почему без nullable?
         AuthResponse loginResponse = await authService.TryLoginAsync(authRequest);
 
         if (loginResponse.IsFailed)
@@ -39,7 +38,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
         if (regRequest == null)
             return BadRequest("Bad request data.");
 
-        AuthResponse? regResponse = await authService.TryRegisterAsync(regRequest);
+        AuthResponse regResponse = await authService.TryRegisterAsync(regRequest);
 
         if (regResponse == null)
             return StatusCode(500, "We've failed to receive an answer from auth service. Please contact service administrator or try again.");
