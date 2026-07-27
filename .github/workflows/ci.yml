@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, auth-unit-tests ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
