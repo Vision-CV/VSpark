@@ -1,26 +1,37 @@
-﻿using Microsoft.Extensions.Options;
-
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Tokens;
-using VSpark.Models.Config;
 using VSpark.Persistence;
 using VSpark.Services.Auth;
 using VSpark.Tests.Tools.Persistence;
+using VSpark.Tests.Tools.Settings;
+using VSpark.Tests.Tools.Utils;
 
 namespace VSpark.Tests;
 
 public class TokenManagerTests
 {
-    private IOptions<JwtSettings> jwtSettings = Options.Create(new JwtSettings
+    // Attention! Instances of this field have a per-test lifecycle. Do not touch em.
+    private MemDbContextFactory _dbFactory;
+    private SparkDbContext _dbContext;
+    private TokenManager _tokenManager;
+
+    [SetUp]
+    public void Setup()
     {
-        AccessTokenExpirationMinutes = 15,
-        Issuer = "VSpark",
-        Audience = "User",
-        RefreshTokenExpirationDays = 3,
-        Secret = "supersecret-greatest-test-key-123456"
-    });
+        _dbFactory = new MemDbContextFactory(Guid.NewGuid().ToString());
+        _dbContext = _dbFactory.CreateDbContext();
+
+        _tokenManager = new TokenManager(ConfigsHelper.JwtSettings, _dbFactory);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _dbFactory.Dispose();
+        _dbContext.Dispose();
+    }
 
     [TestCase("Michael", "Anderson", "mikeuser")]
     [TestCase("Sarah", "Mitchell", "sarahdev")]
@@ -30,13 +41,9 @@ public class TokenManagerTests
     [TestCase("Olivia", "Brown", "oliviauser")]
     public void JwtGenerationTest(string name, string surname, string username)
     {
-        User user = UserByStrings(name, surname, username);
+        User user = UserUtils.FromStrings(name, surname, username);
 
-        MemDbContextFactory fact = new MemDbContextFactory(Guid.NewGuid().ToString());
-
-        TokenManager tokenManager = new TokenManager(jwtSettings, fact);
-
-        string? token = tokenManager.CreateJwtToken(user);
+        string? token = _tokenManager.CreateJwtToken(user);
 
         Assert.That(token, Is.Not.Null, "Returned JWT token is null.");
 
@@ -56,9 +63,9 @@ public class TokenManagerTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(jwtToken.Issuer, Is.EqualTo(jwtSettings.Value.Issuer));
-            Assert.That(jwtToken.Audiences.First(), Is.EqualTo(jwtSettings.Value.Audience));
-            Assert.That(tokenLifetimeMinutes, Is.EqualTo(jwtSettings.Value.AccessTokenExpirationMinutes));
+            Assert.That(jwtToken.Issuer, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Issuer));
+            Assert.That(jwtToken.Audiences.First(), Is.EqualTo(ConfigsHelper.JwtSettings.Value.Audience));
+            Assert.That(tokenLifetimeMinutes, Is.EqualTo(ConfigsHelper.JwtSettings.Value.AccessTokenExpirationMinutes));
             Assert.That(user.UserId, Is.EqualTo(Guid.Parse(userId!)));
         });
     }
@@ -71,26 +78,13 @@ public class TokenManagerTests
     [TestCase("Olivia", "Brown", "oliviauser")]
     public async Task RefreshCreationTest_SuccessfullyReturnedToken(string name, string surname, string username)
     {
-        User targetUser = UserByStrings(name, surname, username);
+        User targetUser = UserUtils.FromStrings(name, surname, username);
 
-        using MemDbContextFactory fact = new(Guid.NewGuid().ToString());
-
-        TokenManager tokenManager = new(jwtSettings, fact);
-
-        RefreshToken? token = await tokenManager.CreateRefreshTokenAsync(targetUser);
+        RefreshToken? token = await _tokenManager.CreateRefreshTokenAsync(targetUser);
 
         Assert.That(token, Is.Not.Null, "Method returned null instead of token.");
 
-        TimeSpan expiresSpan = token!.Expires - DateTime.UtcNow;
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(token.Owner, Is.EqualTo(targetUser.UserId));
-            Assert.That(token.Issuer, Is.EqualTo(jwtSettings.Value.Issuer));
-            Assert.That(token.Audience, Is.EqualTo(jwtSettings.Value.Audience));
-            Assert.That(expiresSpan, Is.GreaterThan(TimeSpan.FromDays(0)));
-            Assert.That((int)Math.Round(expiresSpan.TotalDays), Is.EqualTo(jwtSettings.Value.RefreshTokenExpirationDays));
-        });
+        Assert.Multiple(() => CheckRefreshTokenIntegrity(token, targetUser));
     }
 
     [TestCase("Michael", "Anderson", "mikeuser")]
@@ -101,32 +95,17 @@ public class TokenManagerTests
     [TestCase("Olivia", "Brown", "oliviauser")]
     public async Task RefreshCreationTest_SavedToDatabaseCorrectly(string name, string surname, string username)
     {
-        User targetUser = UserByStrings(name, surname, username);
+        User targetUser = UserUtils.FromStrings(name, surname, username);
 
-        using MemDbContextFactory fact = new(Guid.NewGuid().ToString());
-
-        TokenManager tokenManager = new(jwtSettings, fact);
-
-        RefreshToken? token = await tokenManager.CreateRefreshTokenAsync(targetUser);
+        RefreshToken? token = await _tokenManager.CreateRefreshTokenAsync(targetUser);
 
         Assert.That(token, Is.Not.Null, "Method returned null instead of token.");
 
-        using SparkDbContext dbContext = fact.CreateDbContext();
-
-        RefreshToken? dbToken = dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == token!.SessionId);
+        RefreshToken? dbToken = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == token!.SessionId);
 
         Assert.That(dbToken, Is.Not.Null, "Failed to get created token back from the database.");
 
-        TimeSpan expiresSpan = dbToken!.Expires - DateTime.UtcNow;
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(dbToken.Owner, Is.EqualTo(targetUser.UserId));
-            Assert.That(dbToken.Issuer, Is.EqualTo(jwtSettings.Value.Issuer));
-            Assert.That(dbToken.Audience, Is.EqualTo(jwtSettings.Value.Audience));
-            Assert.That(expiresSpan, Is.GreaterThan(TimeSpan.FromDays(0)));
-            Assert.That((int)Math.Round(expiresSpan.TotalDays), Is.EqualTo(jwtSettings.Value.RefreshTokenExpirationDays));
-        });
+        Assert.Multiple(() => CheckRefreshTokenIntegrity(dbToken, targetUser));
     }
 
     [TestCase("Michael", "Anderson", "mikeuser")]
@@ -137,19 +116,13 @@ public class TokenManagerTests
     [TestCase("Olivia", "Brown", "oliviauser")]
     public async Task TryRevokeTokenAsync_RemovesTokenFromDatabase(string name, string surname, string username)
     {
-        using MemDbContextFactory fact = new(Guid.NewGuid().ToString());
-
-        TokenManager tokenManager = new(jwtSettings, fact);
-
-        RefreshToken? targetToken = await tokenManager.CreateRefreshTokenAsync(UserByStrings(name, surname, username));
+        RefreshToken? targetToken = await _tokenManager.CreateRefreshTokenAsync(UserUtils.FromStrings(name, surname, username));
 
         Assert.That(targetToken, Is.Not.Null, "Refresh token is null. (are previous tests are well done?...)");
 
-        await tokenManager.TryRevokeRefreshTokenAsync(targetToken!.Token);
+        await _tokenManager.TryRevokeRefreshTokenAsync(targetToken!.Token);
 
-        using SparkDbContext dbContext = fact.CreateDbContext();
-
-        if (dbContext.RefreshTokens.Any(x => x.SessionId == targetToken.SessionId))
+        if (_dbContext.RefreshTokens.Any(x => x.SessionId == targetToken.SessionId))
             Assert.Fail("Token was not removed from Database correctly or there's a duplicate.");
     }
 
@@ -161,27 +134,21 @@ public class TokenManagerTests
     [TestCase("Olivia", "Brown", "oliviauser")]
     public async Task CleanupRefreshTokensAsync_CleanupsTokens(string name, string surname, string username)
     {
-        using MemDbContextFactory fact = new(Guid.NewGuid().ToString());
+        User targetUser = UserUtils.FromStrings(name, surname, username);
 
-        User targetUser = UserByStrings(name, surname, username);
-
-        TokenManager tokenManager = new(jwtSettings, fact);
-
-        RefreshToken? targetToken = await tokenManager.CreateRefreshTokenAsync(targetUser);
-        RefreshToken? targetToken2 = await tokenManager.CreateRefreshTokenAsync(targetUser);
-        RefreshToken? targetToken3 = await tokenManager.CreateRefreshTokenAsync(targetUser);
+        RefreshToken? targetToken = await _tokenManager.CreateRefreshTokenAsync(targetUser);
+        RefreshToken? targetToken2 = await _tokenManager.CreateRefreshTokenAsync(targetUser);
+        RefreshToken? targetToken3 = await _tokenManager.CreateRefreshTokenAsync(targetUser);
 
         Assert.That(targetToken, Is.Not.Null, "First token is null");
         Assert.That(targetToken2, Is.Not.Null, "Second token is null");
         Assert.That(targetToken3, Is.Not.Null, "Third token is null");
 
-        await tokenManager.CleanupRefreshTokensAsync(targetUser);
+        await _tokenManager.CleanupRefreshTokensAsync(targetUser);
 
-        using SparkDbContext dbContext = fact.CreateDbContext();
-
-        RefreshToken? targetDbToken = dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken.SessionId);
-        RefreshToken? targetDbToken2 = dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken2.SessionId);
-        RefreshToken? targetDbToken3 = dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken3.SessionId);
+        RefreshToken? targetDbToken = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken.SessionId);
+        RefreshToken? targetDbToken2 = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken2.SessionId);
+        RefreshToken? targetDbToken3 = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken3.SessionId);
 
         Assert.Multiple(() =>
         {
@@ -191,13 +158,14 @@ public class TokenManagerTests
         });
     }
 
-    private User UserByStrings(string name, string surname, string username) => new User
+    private void CheckRefreshTokenIntegrity(RefreshToken token, User owner)
     {
-        FirstName = name,
-        SecondName = surname,
-        Username = username,
-        UserId = Guid.NewGuid(),
-        Role = "SA",
-        PasswordHash = "RANDOM"
-    };
+        TimeSpan expiresSpan = token!.Expires - DateTime.UtcNow;
+
+        Assert.That(token.Owner, Is.EqualTo(owner.UserId));
+        Assert.That(token.Issuer, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Issuer));
+        Assert.That(token.Audience, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Audience));
+        Assert.That(expiresSpan, Is.GreaterThan(TimeSpan.FromDays(0)));
+        Assert.That((int)Math.Round(expiresSpan.TotalDays), Is.EqualTo(ConfigsHelper.JwtSettings.Value.RefreshTokenExpirationDays));
+    }
 }
