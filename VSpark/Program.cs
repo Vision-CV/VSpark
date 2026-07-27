@@ -85,6 +85,7 @@ public class Program
         builder.Services.AddScoped<IAuthService, AuthService>();
 
         builder.Services.AddHostedService<RefreshCleanupWorker>();
+        builder.Services.AddHostedService<JwtBlacklistCleanupWorker>();
 
         builder.Logging.AddConsole();
 

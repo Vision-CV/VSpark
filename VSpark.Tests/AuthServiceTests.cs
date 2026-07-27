@@ -14,6 +14,8 @@ namespace VSpark.Tests;
 
 public class AuthServiceTests
 {
+    // TODO: Add integrational tests of the jwt blacklist correct work.
+
     // Attention! Instances of this field have a per-test lifecycle. Do not touch em.
     private MemDbContextFactory _dbFactory;
     private SparkDbContext _dbContext;

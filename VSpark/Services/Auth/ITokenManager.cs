@@ -3,6 +3,7 @@ using VSpark.Models.Auth.Tokens;
 
 namespace VSpark.Services.Auth;
 
+// TODO: Add CleanupExpiredRefreshTokensAsync() method.
 public interface ITokenManager
 {
     public string? CreateJwtToken(User owner);

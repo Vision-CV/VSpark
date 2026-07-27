@@ -12,6 +12,7 @@ using static BCrypt.Net.BCrypt;
 
 namespace VSpark.Services.Auth;
 
+// TODO: Integrate JWT blacklist functionality into auth service.
 public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenManager, ILogger<AuthService> logger) : IAuthService
 {
     public async Task<AuthResponse> TryLoginAsync(AuthRequest request)

@@ -10,6 +10,7 @@ public class JwtBlacklist(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, IJwtBlacklistRepository jwtBlacklist)
     {
+        // TODO: Review the safety of this check
         // Suspicious isn't it?
         if (context.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Name)?.Value == "SERVICE")
         {
