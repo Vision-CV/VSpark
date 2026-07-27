@@ -11,6 +11,7 @@ using System.Text;
 using VSpark.AuthSchemes;
 using VSpark.AuthSchemes.Configs;
 using VSpark.Hubs;
+using VSpark.Middleware;
 using VSpark.Models.Config;
 using VSpark.Persistence;
 using VSpark.Services.Auth;
@@ -103,6 +104,8 @@ public class Program
         app.UseAuthentication();
 
         app.UseAuthorization();
+
+        app.UseMiddleware<JwtBlacklist>();
 
         app.MapControllers();
 

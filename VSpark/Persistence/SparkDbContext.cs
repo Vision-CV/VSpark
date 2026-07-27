@@ -13,4 +13,6 @@ public class SparkDbContext(DbContextOptions<SparkDbContext> options) : DbContex
     public DbSet<User> Users { get; set; }
 
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+
+    public DbSet<BlacklistedJwtToken> JwtBlacklist { get; set; }
 }

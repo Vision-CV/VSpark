@@ -9,6 +9,7 @@ namespace VSpark.Services.Background;
 
 public class RefreshCleanupWorker(IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenManager, ILogger<RefreshCleanupWorker> logger) : BackgroundService
 {
+    // TODO: SRP breach. Refactor required.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -23,7 +24,7 @@ public class RefreshCleanupWorker(IDbContextFactory<SparkDbContext> dbFactory, I
                 if (!await tokenManager.TryRevokeRefreshTokenAsync(targetToken.Token))
                     logger.LogError($"Failed to cleanup expired token with SessionId: {targetToken.SessionId}");
 
-            await Task.Delay((int)TimeSpan.FromDays(3).TotalMilliseconds, stoppingToken);
+            await Task.Delay(TimeSpan.FromDays(3), stoppingToken);
         }
     }
 }

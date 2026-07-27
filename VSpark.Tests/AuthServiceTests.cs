@@ -88,7 +88,7 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(loginResponse));
 
-        Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == loginResponse!.Cookies["Session-Refresh-Token"]), Is.True);
+        Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == loginResponse!.Cookies!["Session-Refresh-Token"]), Is.True);
     }
 
     [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
@@ -105,13 +105,13 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse!.Cookies!["Session-Refresh-Token"];
 
         AuthResponse renewResponse = await _authService.TryRenewSessionAsync(regRefreshToken);
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(renewResponse));
 
-        string renewRefreshToken = renewResponse!.Cookies["Session-Refresh-Token"];
+        string renewRefreshToken = renewResponse!.Cookies!["Session-Refresh-Token"];
 
         Assert.That(renewResponse!.Cookies["Session-Refresh-Token"], Is.Not.EqualTo(regRefreshToken));
 
@@ -136,7 +136,7 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse!.Cookies!["Session-Refresh-Token"];
 
         AuthResponse logoutResponse = await _authService.TryLogoutAsync(regRefreshToken);
 
@@ -159,7 +159,7 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse!.Cookies!["Session-Refresh-Token"];
 
         AuthRequest loginRequest = new AuthRequest() { Username = username, Password = password };
 
@@ -171,8 +171,8 @@ public class AuthServiceTests
 
         List<string> tokensToEvaporate = new()
         {
-            loginResponse1!.Cookies["Session-Refresh-Token"],
-            loginResponse2!.Cookies["Session-Refresh-Token"]
+            loginResponse1!.Cookies!["Session-Refresh-Token"],
+            loginResponse2!.Cookies!["Session-Refresh-Token"]
         };
 
         AuthRequest changeRequest = new AuthRequest { Username = username, Password = password, NewPassword = Guid.NewGuid().ToString() };
