@@ -8,13 +8,13 @@ public class AuthResponse
 
     public bool IsFailed { get; private set; } = false;
 
-    public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.OK;
-
     public string Message { get; private set; } = string.Empty;
 
-    public Dictionary<string, string>? Cookies { get; private set; }
-
     public object? Body { get; private set; }
+
+    public HttpStatusCode StatusCode { get; set; } = HttpStatusCode.OK;
+
+    public Dictionary<string, string>? Cookies { get; private set; }
 
     public void AppendCookies(string key, string value)
     {
