@@ -76,15 +76,14 @@ public class Program
         builder.Services.Configure<JwtSettings>(jwtSettings);
         builder.Services.Configure<AuthSettings>(authSettings);
 
-        // Заревьювить сроки жизни сервисов.
         builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();
-        //builder.Services.AddSingleton<ISuspectsRepository, SuspectsRepository>();
         builder.Services.AddSingleton<ITokenManager, TokenManager>();
-        builder.Services.AddSingleton<IApiTokenManager, ApiTokenManager>();
+        builder.Services.AddSingleton<ISessionManager, SessionManager>();
+        builder.Services.AddSingleton<IJwtBlacklistRepository, JwtBlacklistRepository>();
 
         builder.Services.AddScoped<IAuthService, AuthService>();
 
-        builder.Services.AddHostedService<RefreshCleanupWorker>();
+        builder.Services.AddHostedService<SessionsCleanupWorker>();
         builder.Services.AddHostedService<JwtBlacklistCleanupWorker>();
 
         builder.Logging.AddConsole();

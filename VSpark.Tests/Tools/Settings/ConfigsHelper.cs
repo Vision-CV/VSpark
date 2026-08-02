@@ -13,7 +13,7 @@ public static class ConfigsHelper
 
     public static IOptions<JwtSettings> JwtSettings = Options.Create(new JwtSettings
     {
-        AccessTokenExpirationMinutes = 15,
+        JwtTokenExpirationMinutes = 15,
         Issuer = "VSpark",
         Audience = "User",
         RefreshTokenExpirationDays = 3,

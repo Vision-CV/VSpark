@@ -4,20 +4,19 @@ using Microsoft.Extensions.Options;
 using System.Net;
 
 using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
 using VSpark.Models.Config;
+using VSpark.Models.DTO;
 using VSpark.Persistence;
 
 using static BCrypt.Net.BCrypt;
 
 namespace VSpark.Services.Auth;
 
-// TODO: Integrate JWT blacklist functionality into auth service.
-public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ITokenManager tokenManager, ILogger<AuthService> logger) : IAuthService
+public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ISessionManager sessionManager, ILogger<AuthService> logger) : IAuthService
 {
     public async Task<AuthResponse> TryLoginAsync(AuthRequest request)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
         User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == request.Username);
         
@@ -32,47 +31,27 @@ public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<
 
     public async Task<AuthResponse> TryLogoutAsync(string refresh)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await sessionManager.RevokeSessionAsync(refresh);
 
-        RefreshToken? targetSession = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == refresh);
-
-        if (targetSession == null)
-            return AuthResponse.Fail(HttpStatusCode.NotFound, "There's no sessions found with the current SessionId");
-
-        if (!await tokenManager.TryRevokeRefreshTokenAsync(refresh))
-            return AuthResponse.Fail(HttpStatusCode.InternalServerError, "Something went wrong. Please try again.");
-
-        return AuthResponse.Success(message: $"Session {targetSession.SessionId} successfully closed.");
+        return AuthResponse.Success("Logout successful");
     }
 
     public async Task<AuthResponse> TryRenewSessionAsync(string refresh)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        SessionTokensDto? tokens = await sessionManager.RotateTokensAsync(refresh);
 
-        RefreshToken? targetRefresh = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == refresh);
+        if (tokens == null)
+            return AuthResponse.Fail(HttpStatusCode.InternalServerError, "Failed to renew session. Please try again.");
 
-        if (targetRefresh == null)
-            return AuthResponse.Fail(HttpStatusCode.Unauthorized, "You're not authorized.");
+        AuthResponse successResponse = AuthResponse.Success(tokens.JwtToken);
+        successResponse.AppendCookies("Session-Refresh-Token", tokens.RefreshToken);
 
-        if (targetRefresh.Expires < DateTime.UtcNow)
-            return AuthResponse.Fail(HttpStatusCode.Unauthorized, "Your refresh token expired. Please login.");
-
-        User? owner = await dbContext.Users.FirstOrDefaultAsync(x => x.UserId == targetRefresh.Owner);
-
-        if (owner == null)
-            return AuthResponse.Fail(HttpStatusCode.NotFound, "There's no users associated with the provided refresh.");
-
-        AuthResponse newSessionResponse = await CreateSessionAsync(owner);
-
-        if (!await tokenManager.TryRevokeRefreshTokenAsync(refresh))
-            logger.LogError($"Failed to revoke refresh token for session with id: {targetRefresh.SessionId}");
-
-        return newSessionResponse;
+        return successResponse;
     }
 
     public async Task<AuthResponse> TryRegisterAsync(RegRequest request)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
         if (await dbContext.Users.AnyAsync(x => x.Username == request.Username))
             return AuthResponse.Fail(HttpStatusCode.BadRequest, "User with the current username already exists.");
@@ -98,7 +77,7 @@ public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<
 
     public async Task<AuthResponse> TryChangePasswordAsync(AuthRequest request, string refresh)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        await using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
         User? targetUser = await dbContext.Users.FirstOrDefaultAsync(x => x.Username == request.Username);
 
@@ -112,29 +91,18 @@ public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<
 
         await dbContext.SaveChangesAsync();
 
-        List<RefreshToken> tokensToRevoke = await dbContext.RefreshTokens
-            .Where(x => x.Owner == targetUser.UserId && x.Token != refresh)
-            .ToListAsync();
-
-        foreach (RefreshToken refreshToken in tokensToRevoke)
-            if (!await tokenManager.TryRevokeRefreshTokenAsync(refreshToken.Token))
-                logger.LogError($"Failed to reset session after password change. SessionID: {refreshToken.SessionId}");
+        await sessionManager.RevokeAllUserSessionsAsync(targetUser);
 
         return AuthResponse.Success(message: "Password successfully changed!");
     }
 
     private async Task<AuthResponse> CreateSessionAsync(User user)
     {
-        string? jwtToken = tokenManager.CreateJwtToken(user);
+        SessionTokensDto tokensDto = await sessionManager.CreateSessionAsync(user);
 
-        RefreshToken? refreshToken = await tokenManager.CreateRefreshTokenAsync(user);
+        AuthResponse sessionCreationResponse = AuthResponse.Success(tokensDto.JwtToken);
+        sessionCreationResponse.AppendCookies("Session-Refresh-Token", tokensDto.RefreshToken);
 
-        if (refreshToken == null)
-            return AuthResponse.Fail(HttpStatusCode.InternalServerError, "Failed to create a new session. Please try again or contact a server administrator");
-
-        AuthResponse successResponse = AuthResponse.Success(jwtToken, $"Successfully authorized as {user.Username}!");
-        successResponse.AppendCookies("Session-Refresh-Token", refreshToken.Token);
-
-        return successResponse;
+        return sessionCreationResponse;
     }
 }

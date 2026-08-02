@@ -1,5 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using System.IdentityModel.Tokens.Jwt;
@@ -8,17 +7,20 @@ using System.Security.Cryptography;
 using System.Text;
 
 using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
+using VSpark.Models.Auth.Permissions;
 using VSpark.Models.Config;
-using VSpark.Persistence;
+using VSpark.Models.DTO;
 
 namespace VSpark.Services.Auth;
 
-public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<SparkDbContext> dbFactory) : ITokenManager
+public class TokenManager(IOptions<JwtSettings> jwtSettings) : ITokenManager
 {
     private byte[]? _jwtSecret;
+    private byte[]? _stsSecret;
 
-    public string? CreateJwtToken(User owner)
+    // TODO: API token generation placeholder for next updates.
+    // Critical points:
+    public string CreateApiToken(string service)
     {
         if (_jwtSecret == null)
             _jwtSecret = Encoding.UTF8.GetBytes(jwtSettings.Value.Secret!);
@@ -28,9 +30,40 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
 
         List<Claim> claims = new List<Claim>
         {
+            new Claim(JwtRegisteredClaimNames.Sub, service),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("permissions", ((int)UserPermissions.ServiceAdmin).ToString()), // Here
+            new Claim("type", "sts")
+        };
+
+        JwtSecurityToken jwtSecurityToken = new JwtSecurityToken(
+            issuer: jwtSettings.Value.Issuer,
+            audience: service,
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(30), // Here
+            signingCredentials: signingCredentials // Here
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
+    }
+
+    public JwtTokenDto CreateJwtToken(User owner, Guid sessionId)
+    {
+        if (_jwtSecret == null)
+            _jwtSecret = Encoding.UTF8.GetBytes(jwtSettings.Value.Secret!);
+
+        SymmetricSecurityKey signingKey = new SymmetricSecurityKey(_jwtSecret);
+        SigningCredentials signingCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
+
+        string jti = Guid.NewGuid().ToString();
+        DateTime expires = DateTime.UtcNow.AddMinutes(jwtSettings.Value.JwtTokenExpirationMinutes);
+
+        List<Claim> claims = new List<Claim>
+        {
             new Claim(JwtRegisteredClaimNames.Sub, owner.UserId.ToString()),
             new Claim(JwtRegisteredClaimNames.Name, owner.Username!),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, jti),
+            new Claim(JwtRegisteredClaimNames.Sid, sessionId.ToString()),
             new Claim(ClaimTypes.Role, owner.Role!),
         };
 
@@ -38,14 +71,16 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
             issuer: jwtSettings.Value.Issuer,
             audience: jwtSettings.Value.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(jwtSettings.Value.AccessTokenExpirationMinutes),
+            expires: expires,
             signingCredentials: signingCredentials
         );
 
-        return new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken);
+        JwtTokenDto jwtTokenDto = new JwtTokenDto(new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken), jti, expires);
+
+        return jwtTokenDto;
     }
 
-    public async Task<RefreshToken?> CreateRefreshTokenAsync(User owner)
+    public string CreateRefreshToken()
     {
         byte[] rns = new byte[32];
 
@@ -54,53 +89,20 @@ public class TokenManager(IOptions<JwtSettings> jwtSettings, IDbContextFactory<S
 
         string token = Convert.ToBase64String(rns);
 
-        RefreshToken refreshToken = new() { Expires = DateTime.UtcNow.AddDays(jwtSettings.Value.RefreshTokenExpirationDays), SessionId = Guid.NewGuid(), Token = token };
-        refreshToken.Owner = owner.UserId;
-        refreshToken.Issuer = jwtSettings.Value.Issuer;
-        refreshToken.Audience = jwtSettings.Value.Audience;
-
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
-
-        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.SessionId == refreshToken.SessionId);
-
-        if (targetToken != null)
-            dbContext.RefreshTokens.Remove(targetToken);
-
-        await dbContext.RefreshTokens.AddAsync(refreshToken);
-
-        await dbContext.SaveChangesAsync();
-
-        return refreshToken;
+        return token;
     }
 
-    public async Task<bool> TryRevokeRefreshTokenAsync(string token)
+    public SessionTokensDto CreateSessionTokensPair(User owner, Guid sessionId)
     {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
+        string refreshToken = CreateRefreshToken();
+        JwtTokenDto jwtTokenDto = CreateJwtToken(owner, sessionId);
 
-        RefreshToken? targetToken = await dbContext.RefreshTokens.FirstOrDefaultAsync(x => x.Token == token);
+        return new SessionTokensDto(refreshToken, jwtTokenDto);
+    }
 
-        if (targetToken == null)
-            return false;
-
-        dbContext.RefreshTokens.Remove(targetToken);
-
-        await dbContext.SaveChangesAsync();
-
+    // TODO: Also a placeholder.
+    public bool VerifyApiToken(string token)
+    {
         return true;
-    }
-
-    public async Task CleanupRefreshTokensAsync(User owner)
-    {
-        using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
-
-        IEnumerable<RefreshToken>? targetTokens = dbContext.RefreshTokens.Where(x => x.Owner == owner.UserId);
-
-        if (targetTokens == null)
-            return;
-
-        foreach (RefreshToken token in targetTokens)
-            dbContext.RefreshTokens.Remove(token);
-
-        await dbContext.SaveChangesAsync();
     }
 }

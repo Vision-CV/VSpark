@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
+using System.IdentityModel.Tokens.Jwt;
+
 using VSpark.Models.Auth.Tokens;
 using VSpark.Persistence;
 
@@ -7,14 +9,14 @@ namespace VSpark.Services.Auth;
 
 public class JwtBlacklistRepository(IDbContextFactory<SparkDbContext> dbFactory) : IJwtBlacklistRepository
 {
-    public async Task AddToBlacklistAsync(string token)
+    public async Task BlacklistTokenAsync(string jti, DateTime expires)
     {
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        if (dbContext.JwtBlacklist.Any(x => x.Token == token))
+        if (dbContext.JwtBlacklist.Any(x => x.JwtId == jti))
             return;
 
-        BlacklistedJwtToken blacklistedToken = new BlacklistedJwtToken(token);
+        BlacklistedJwtToken blacklistedToken = new BlacklistedJwtToken(jti, expires);
 
         dbContext.JwtBlacklist.Add(blacklistedToken);
 
@@ -33,9 +35,11 @@ public class JwtBlacklistRepository(IDbContextFactory<SparkDbContext> dbFactory)
 
     public async Task<bool> VerifyAsync(string token)
     {
+        JwtSecurityToken targetToken = new JwtSecurityToken(token);
+
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        if (await dbContext.JwtBlacklist.AnyAsync(x => x.Token == token))
+        if (await dbContext.JwtBlacklist.AnyAsync(x => x.JwtId == targetToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Jti).Value))
             return false;
 
         return true;

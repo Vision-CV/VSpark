@@ -11,11 +11,11 @@ namespace VSpark.AuthSchemes;
 
 public class ApiKeyHandler : AuthenticationHandler<ApiKeySchemeOptions>
 {
-    private IApiTokenManager _apiTokenManager;
+    private ITokenManager _tokenManager;
 
-    public ApiKeyHandler(IOptionsMonitor<ApiKeySchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, IApiTokenManager apiTokenManager) : base(options, logger, encoder)
+    public ApiKeyHandler(IOptionsMonitor<ApiKeySchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ITokenManager tokenManager) : base(options, logger, encoder)
     {
-        _apiTokenManager = apiTokenManager;
+        _tokenManager = tokenManager;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -28,7 +28,7 @@ public class ApiKeyHandler : AuthenticationHandler<ApiKeySchemeOptions>
         if (apiKey == null)
             return AuthenticateResult.NoResult();
 
-        if (!_apiTokenManager.VerifyToken(apiKey))
+        if (!_tokenManager.VerifyApiToken(apiKey))
             return AuthenticateResult.Fail("Incorrect token");
 
         Claim[] claims = new[]

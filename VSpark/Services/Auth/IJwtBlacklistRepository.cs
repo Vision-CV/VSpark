@@ -4,7 +4,7 @@ public interface IJwtBlacklistRepository
 {
     public Task<bool> VerifyAsync(string token);
 
-    public Task AddToBlacklistAsync(string token);
+    public Task BlacklistTokenAsync(string jti, DateTime expires);
 
     public Task CleanupExpiredTokensAsync();
 }
