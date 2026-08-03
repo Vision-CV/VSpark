@@ -16,7 +16,6 @@ public static class ConfigsHelper
         JwtTokenExpirationMinutes = 15,
         Issuer = "VSpark",
         Audience = "User",
-        RefreshTokenExpirationDays = 3,
         Secret = "supersecret-greatest-test-key-123456"
     });
 }
