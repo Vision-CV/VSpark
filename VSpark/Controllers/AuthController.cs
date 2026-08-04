@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 using System.Net;
@@ -11,7 +12,7 @@ namespace VSpark.Controllers;
 
 [ApiController]
 [Route("auth")]
-public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService authService) : ControllerBase
+public class AuthController(IOptions<AuthSettings> authSettings, IAuthService authService) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] AuthRequest? authRequest)
@@ -54,6 +55,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
         return Ok(regResponse.Body);
     }
 
+    [Authorize(AuthenticationSchemes = "Bearer")]
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
@@ -67,7 +69,7 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
 
         if (logoutResponse.IsFailed)
             return StatusCode((int)logoutResponse.StatusCode, logoutResponse.Message);
-
+        
         Response.Cookies.Delete("Session-Refresh-Token");
 
         return Ok("Successful logout.");
@@ -117,6 +119,6 @@ public class AuthController(IOptions<JwtSettings> jwtSettings, IAuthService auth
         HttpOnly = true,
         Secure = true,
         SameSite = SameSiteMode.Strict,
-        MaxAge = TimeSpan.FromDays(jwtSettings.Value.RefreshTokenExpirationDays)
+        MaxAge = TimeSpan.FromDays(authSettings.Value.SessionExpirationDays)
     };
 }

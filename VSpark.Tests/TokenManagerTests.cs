@@ -1,171 +1,120 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
-using VSpark.Persistence;
+using VSpark.Models.DTO;
 using VSpark.Services.Auth;
-using VSpark.Tests.Tools.Persistence;
 using VSpark.Tests.Tools.Settings;
-using VSpark.Tests.Tools.Utils;
 
 namespace VSpark.Tests;
 
 public class TokenManagerTests
 {
-    // Attention! Instances of this field have a per-test lifecycle. Do not touch em.
-    private MemDbContextFactory _dbFactory;
-    private SparkDbContext _dbContext;
+    private int _refreshGenerationCheckIterations = 10000;
+
     private TokenManager _tokenManager;
 
     [SetUp]
-    public void Setup()
+    public void Setup() => _tokenManager = new TokenManager(ConfigsHelper.JwtSettings);
+
+    [TestCase("550e8400-e29b-41d4-a716-446655440000", "john.doe", "User", "7f8b4f4e-4b7e-4d5e-9c3e-1f7d8b9a1234")]
+    [TestCase("8b7e4c2d-2a61-4b91-9f5e-1a2c3d4e5f60", "admin", "Admin", "b1a2c3d4-e5f6-4789-8123-abcdef123456")]
+    [TestCase("12345678-1234-4321-8765-123456789abc", "guest", "Guest", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")]
+    [TestCase("deadbeef-dead-beef-dead-beefdeadbeef", "moderator.user", "Moderator", "11111111-2222-3333-4444-555555555555")]
+    [TestCase("00000000-0000-0000-0000-000000000001", "a", "User", "00000000-0000-0000-0000-000000000002")]
+    [TestCase("11111111-2222-3333-4444-555555555555", "very.long.username.with.many.characters.testing.jwt.claims", "Developer", "66666666-7777-8888-9999-aaaaaaaaaaaa")]
+    [TestCase("abcdefab-cdef-abcd-efab-cdefabcdefab", "user_123456789", "Support", "fedcba98-7654-3210-fedc-ba9876543210")]
+    [TestCase("01234567-89ab-cdef-0123-456789abcdef", "UPPERCASE.USER", "ADMIN", "13572468-2468-1357-2468-135724681357")]
+    [TestCase("99999999-9999-9999-9999-999999999999", "user-with-special_chars.123", "System", "99999999-8888-7777-6666-555555555555")]
+    [TestCase("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "0", "Service", "12341234-5678-90ab-cdef-1234567890ab")]
+    public void CreateJwtToken_CreatedSuccessfully(string userId, string username, string role, string sessionId)
     {
-        _dbFactory = new MemDbContextFactory(Guid.NewGuid().ToString());
-        _dbContext = _dbFactory.CreateDbContext();
+        User owner = BuildUser(userId, username, role);
 
-        _tokenManager = new TokenManager(ConfigsHelper.JwtSettings, _dbFactory);
-    }
+        JwtTokenDto jwtToken = _tokenManager.CreateJwtToken(owner, Guid.Parse(sessionId));
 
-    [TearDown]
-    public void TearDown()
-    {
-        _dbFactory.Dispose();
-        _dbContext.Dispose();
-    }
+        int jwtLifetimeMinutes = (int)Math.Round((jwtToken.ExpiresAt - DateTime.UtcNow).TotalMinutes);
 
-    [TestCase("Michael", "Anderson", "mikeuser")]
-    [TestCase("Sarah", "Mitchell", "sarahdev")]
-    [TestCase("Daniel", "Thompson", "danieladmin")]
-    [TestCase("Emma", "Wilson", "emmaoperator")]
-    [TestCase("Robert", "Johnson", "robservice")]
-    [TestCase("Olivia", "Brown", "oliviauser")]
-    public void JwtGenerationTest(string name, string surname, string username)
-    {
-        User user = UserUtils.FromStrings(name, surname, username);
-
-        string? token = _tokenManager.CreateJwtToken(user);
-
-        Assert.That(token, Is.Not.Null, "Returned JWT token is null.");
-
-        JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
-
-        JwtSecurityToken jwtToken = tokenHandler.ReadJwtToken(token);
-
-        string userId = jwtToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Sub).Value;
-
-        Assert.That(userId, Is.Not.Null.Or.Empty, "userId didn't found in the token object.");
-
-        string expiresString = jwtToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Exp).Value;
-
-        Assert.That(expiresString, Is.Not.Null, "Expires field is null.");
-
-        byte tokenLifetimeMinutes = (byte)Math.Round((jwtToken.ValidTo - DateTime.UtcNow).TotalMinutes);
-
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
-            Assert.That(jwtToken.Issuer, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Issuer));
-            Assert.That(jwtToken.Audiences.First(), Is.EqualTo(ConfigsHelper.JwtSettings.Value.Audience));
-            Assert.That(tokenLifetimeMinutes, Is.EqualTo(ConfigsHelper.JwtSettings.Value.AccessTokenExpirationMinutes));
-            Assert.That(user.UserId, Is.EqualTo(Guid.Parse(userId!)));
-        });
-    }
+            Assert.That(jwtToken.Token, Is.Not.Null.Or.Empty);
+            Assert.That(jwtLifetimeMinutes, Is.EqualTo(ConfigsHelper.JwtSettings.Value.JwtTokenExpirationMinutes));
+        }
 
-    [TestCase("Michael", "Anderson", "mikeuser")]
-    [TestCase("Sarah", "Mitchell", "sarahdev")]
-    [TestCase("Daniel", "Thompson", "danieladmin")]
-    [TestCase("Emma", "Wilson", "emmaoperator")]
-    [TestCase("Robert", "Johnson", "robservice")]
-    [TestCase("Olivia", "Brown", "oliviauser")]
-    public async Task RefreshCreationTest_SuccessfullyReturnedToken(string name, string surname, string username)
-    {
-        User targetUser = UserUtils.FromStrings(name, surname, username);
+        JwtSecurityToken jwtTokenObj = new JwtSecurityToken(jwtToken.Token);
 
-        RefreshToken? token = await _tokenManager.CreateRefreshTokenAsync(targetUser);
+        Dictionary<string, string> jwtTokenClaims = ClaimsToDict(jwtTokenObj.Claims);
 
-        Assert.That(token, Is.Not.Null, "Method returned null instead of token.");
-
-        Assert.Multiple(() => CheckRefreshTokenIntegrity(token, targetUser));
-    }
-
-    [TestCase("Michael", "Anderson", "mikeuser")]
-    [TestCase("Sarah", "Mitchell", "sarahdev")]
-    [TestCase("Daniel", "Thompson", "danieladmin")]
-    [TestCase("Emma", "Wilson", "emmaoperator")]
-    [TestCase("Robert", "Johnson", "robservice")]
-    [TestCase("Olivia", "Brown", "oliviauser")]
-    public async Task RefreshCreationTest_SavedToDatabaseCorrectly(string name, string surname, string username)
-    {
-        User targetUser = UserUtils.FromStrings(name, surname, username);
-
-        RefreshToken? token = await _tokenManager.CreateRefreshTokenAsync(targetUser);
-
-        Assert.That(token, Is.Not.Null, "Method returned null instead of token.");
-
-        RefreshToken? dbToken = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == token!.SessionId);
-
-        Assert.That(dbToken, Is.Not.Null, "Failed to get created token back from the database.");
-
-        Assert.Multiple(() => CheckRefreshTokenIntegrity(dbToken, targetUser));
-    }
-
-    [TestCase("Michael", "Anderson", "mikeuser")]
-    [TestCase("Sarah", "Mitchell", "sarahdev")]
-    [TestCase("Daniel", "Thompson", "danieladmin")]
-    [TestCase("Emma", "Wilson", "emmaoperator")]
-    [TestCase("Robert", "Johnson", "robservice")]
-    [TestCase("Olivia", "Brown", "oliviauser")]
-    public async Task TryRevokeTokenAsync_RemovesTokenFromDatabase(string name, string surname, string username)
-    {
-        RefreshToken? targetToken = await _tokenManager.CreateRefreshTokenAsync(UserUtils.FromStrings(name, surname, username));
-
-        Assert.That(targetToken, Is.Not.Null, "Refresh token is null. (are previous tests are well done?...)");
-
-        await _tokenManager.TryRevokeRefreshTokenAsync(targetToken!.Token);
-
-        if (_dbContext.RefreshTokens.Any(x => x.SessionId == targetToken.SessionId))
-            Assert.Fail("Token was not removed from Database correctly or there's a duplicate.");
-    }
-
-    [TestCase("Michael", "Anderson", "mikeuser")]
-    [TestCase("Sarah", "Mitchell", "sarahdev")]
-    [TestCase("Daniel", "Thompson", "danieladmin")]
-    [TestCase("Emma", "Wilson", "emmaoperator")]
-    [TestCase("Robert", "Johnson", "robservice")]
-    [TestCase("Olivia", "Brown", "oliviauser")]
-    public async Task CleanupRefreshTokensAsync_CleanupsTokens(string name, string surname, string username)
-    {
-        User targetUser = UserUtils.FromStrings(name, surname, username);
-
-        RefreshToken? targetToken = await _tokenManager.CreateRefreshTokenAsync(targetUser);
-        RefreshToken? targetToken2 = await _tokenManager.CreateRefreshTokenAsync(targetUser);
-        RefreshToken? targetToken3 = await _tokenManager.CreateRefreshTokenAsync(targetUser);
-
-        Assert.That(targetToken, Is.Not.Null, "First token is null");
-        Assert.That(targetToken2, Is.Not.Null, "Second token is null");
-        Assert.That(targetToken3, Is.Not.Null, "Third token is null");
-
-        await _tokenManager.CleanupRefreshTokensAsync(targetUser);
-
-        RefreshToken? targetDbToken = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken.SessionId);
-        RefreshToken? targetDbToken2 = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken2.SessionId);
-        RefreshToken? targetDbToken3 = _dbContext.RefreshTokens.FirstOrDefault(x => x.SessionId == targetToken3.SessionId);
-
-        Assert.Multiple(() =>
+        using (Assert.EnterMultipleScope())
         {
-            Assert.That(targetDbToken, Is.Null, "First token was not removed from the database.");
-            Assert.That(targetDbToken2, Is.Null, "Second token was not removed from the database.");
-            Assert.That(targetDbToken3, Is.Null, "Third token was not removed from the database.");
-        });
+            Assert.That(jwtTokenClaims[JwtRegisteredClaimNames.Sub], Is.EqualTo(userId));
+            Assert.That(jwtTokenClaims[JwtRegisteredClaimNames.Name], Is.EqualTo(username));
+            Assert.That(jwtTokenClaims[JwtRegisteredClaimNames.Jti], Is.EqualTo(jwtToken.Jti));
+            Assert.That(jwtTokenClaims[JwtRegisteredClaimNames.Sid], Is.EqualTo(sessionId));
+            Assert.That(jwtTokenClaims[ClaimTypes.Role], Is.EqualTo(role));
+        }
     }
 
-    private void CheckRefreshTokenIntegrity(RefreshToken token, User owner)
+    [Test]
+    public void CreateRefreshToken_CreatedSuccessfully()
     {
-        TimeSpan expiresSpan = token!.Expires - DateTime.UtcNow;
+        double averageLength = 0;
 
-        Assert.That(token.Owner, Is.EqualTo(owner.UserId));
-        Assert.That(token.Issuer, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Issuer));
-        Assert.That(token.Audience, Is.EqualTo(ConfigsHelper.JwtSettings.Value.Audience));
-        Assert.That(expiresSpan, Is.GreaterThan(TimeSpan.FromDays(0)));
-        Assert.That((int)Math.Round(expiresSpan.TotalDays), Is.EqualTo(ConfigsHelper.JwtSettings.Value.RefreshTokenExpirationDays));
+        HashSet<string> refreshTokens = new();
+        for (int i = 0; i < _refreshGenerationCheckIterations; i++)
+        {
+            string newRefresh = _tokenManager.CreateRefreshToken();
+
+            if (refreshTokens.Contains(newRefresh))
+                Assert.Fail("Refresh tokens uniqueness breach detected.");
+
+            refreshTokens.Add(newRefresh);
+
+            averageLength += newRefresh.Length;
+        }
+
+        averageLength = averageLength / _refreshGenerationCheckIterations;
+
+        Assert.That(averageLength, Is.EqualTo(44.0));
+    }
+
+    [TestCase("550e8400-e29b-41d4-a716-446655440000", "john.doe", "User", "7f8b4f4e-4b7e-4d5e-9c3e-1f7d8b9a1234")]
+    [TestCase("8b7e4c2d-2a61-4b91-9f5e-1a2c3d4e5f60", "admin", "Admin", "b1a2c3d4-e5f6-4789-8123-abcdef123456")]
+    [TestCase("12345678-1234-4321-8765-123456789abc", "guest", "Guest", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")]
+    [TestCase("deadbeef-dead-beef-dead-beefdeadbeef", "moderator.user", "Moderator", "11111111-2222-3333-4444-555555555555")]
+    [TestCase("00000000-0000-0000-0000-000000000001", "a", "User", "00000000-0000-0000-0000-000000000002")]
+    [TestCase("11111111-2222-3333-4444-555555555555", "very.long.username.with.many.characters.testing.jwt.claims", "Developer", "66666666-7777-8888-9999-aaaaaaaaaaaa")]
+    [TestCase("abcdefab-cdef-abcd-efab-cdefabcdefab", "user_123456789", "Support", "fedcba98-7654-3210-fedc-ba9876543210")]
+    [TestCase("01234567-89ab-cdef-0123-456789abcdef", "UPPERCASE.USER", "ADMIN", "13572468-2468-1357-2468-135724681357")]
+    [TestCase("99999999-9999-9999-9999-999999999999", "user-with-special_chars.123", "System", "99999999-8888-7777-6666-555555555555")]
+    [TestCase("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "0", "Service", "12341234-5678-90ab-cdef-1234567890ab")]
+    public void CreateSessionTokensPair_CreatedSuccessfully(string userId, string username, string role, string sessionId)
+    {
+        User owner = BuildUser(userId, username, role);
+
+        SessionTokensDto tokensDto = _tokenManager.CreateSessionTokensPair(owner, Guid.Parse(sessionId));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(tokensDto.JwtToken, Is.Not.Null.Or.Empty);
+            Assert.That(tokensDto.RefreshToken, Is.Not.Null.Or.Empty);
+        }
+    }
+
+    private User BuildUser(string userId, string username, string role) => new User
+    {
+        UserId = Guid.Parse(userId),
+        Username = username,
+        Role = role
+    };
+
+    private Dictionary<string, string> ClaimsToDict(IEnumerable<Claim> source)
+    {
+        Dictionary<string, string> output = new Dictionary<string, string>();
+
+        foreach (Claim claim in source)
+            output.Add(claim.Type, claim.Value);
+
+        return output;
     }
 }

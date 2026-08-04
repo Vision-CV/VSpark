@@ -1,15 +1,17 @@
 ﻿using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
+using VSpark.Models.DTO;
 
 namespace VSpark.Services.Auth;
 
 public interface ITokenManager
 {
-    public string? CreateJwtToken(User owner);
+    public JwtTokenDto CreateJwtToken(User owner, Guid sessionId);
 
-    public Task<RefreshToken?> CreateRefreshTokenAsync(User owner);
+    public string CreateRefreshToken();
 
-    public Task<bool> TryRevokeRefreshTokenAsync(string token);
+    public SessionTokensDto CreateSessionTokensPair(User owner, Guid sessionId);
 
-    public Task CleanupRefreshTokensAsync(User owner);
+    public string CreateApiToken(string service);
+
+    public bool VerifyApiToken(string token);
 }

@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Options;
 
 using System.Net;
 
 using VSpark.Models.Auth;
+using VSpark.Models.Auth.Sessions;
+using VSpark.Models.Config;
 using VSpark.Persistence;
 using VSpark.Services.Auth;
 using VSpark.Tests.Tools.Persistence;
@@ -14,12 +16,15 @@ namespace VSpark.Tests;
 
 public class AuthServiceTests
 {
-    // Attention! Instances of this field have a per-test lifecycle. Do not touch em.
+    private IAuthService _authService;
+    private ISessionManager _sessionManager;
+    private IJwtBlacklistRepository _jwtBlacklist;
+
+    private IOptions<AuthSettings> _authSettings = ConfigsHelper.AuthOptions;
+    private IOptions<JwtSettings> _jwtSettings = ConfigsHelper.JwtSettings;
+
     private MemDbContextFactory _dbFactory;
     private SparkDbContext _dbContext;
-
-    private TokenManager _tokenManager;
-    private AuthService _authService;
 
     [SetUp]
     public void Setup()
@@ -27,8 +32,9 @@ public class AuthServiceTests
         _dbFactory = new MemDbContextFactory(Guid.NewGuid().ToString());
         _dbContext = _dbFactory.CreateDbContext();
 
-        _tokenManager = new TokenManager(ConfigsHelper.JwtSettings, _dbFactory);
-        _authService = new AuthService(ConfigsHelper.AuthOptions, _dbFactory, _tokenManager, new NullLogger<AuthService>());
+        _jwtBlacklist = new JwtBlacklistRepository(_dbFactory);
+        _sessionManager = new SessionManager(_authSettings, _dbFactory, new TokenManager(_jwtSettings), _jwtBlacklist);
+        _authService = new AuthService(ConfigsHelper.AuthOptions, _dbFactory, _sessionManager);
     }
 
     [TearDown]
@@ -88,7 +94,11 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(loginResponse));
 
-        Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == loginResponse!.Cookies["Session-Refresh-Token"]), Is.True);
+        User? targetUser = _dbContext.Users.FirstOrDefault(x => x.Username == username);
+
+        Assert.That(targetUser, Is.Not.Null);
+
+        Assert.That(_dbContext.Sessions.Any(x => x.OwnerId == targetUser.UserId));
     }
 
     [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
@@ -105,20 +115,26 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
 
         AuthResponse renewResponse = await _authService.TryRenewSessionAsync(regRefreshToken);
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(renewResponse));
 
-        string renewRefreshToken = renewResponse!.Cookies["Session-Refresh-Token"];
+        string renewRefreshToken = renewResponse.Cookies!["Session-Refresh-Token"];
 
         Assert.That(renewResponse!.Cookies["Session-Refresh-Token"], Is.Not.EqualTo(regRefreshToken));
 
         Assert.Multiple(() =>
         {
-            Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == renewRefreshToken), Is.True);
-            Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == regRefreshToken), Is.False);
+            string renewRefreshTokenHash = AuthSession.HashRefreshToken(renewRefreshToken);
+            string regRefreshTokenHash = AuthSession.HashRefreshToken(regRefreshToken);
+
+            bool sessionWithNewTokenExists = _dbContext.Sessions.Any(x => x.RefreshTokenHash == renewRefreshTokenHash);
+            bool sessionWithOldTokenExists = _dbContext.Sessions.Any(x => x.RefreshTokenHash == regRefreshTokenHash);
+
+            Assert.That(sessionWithNewTokenExists, Is.True);
+            Assert.That(sessionWithOldTokenExists, Is.False);
         });
     }
 
@@ -136,13 +152,15 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
 
         AuthResponse logoutResponse = await _authService.TryLogoutAsync(regRefreshToken);
 
         Assert.That(logoutResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-        Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == regRefreshToken), Is.False);
+        string regRefreshTokenHash = AuthSession.HashRefreshToken(regRefreshToken);
+
+        Assert.That(_dbContext.Sessions.Any(x => x.RefreshTokenHash == regRefreshTokenHash), Is.False);
     }
 
     [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
@@ -159,7 +177,7 @@ public class AuthServiceTests
 
         Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
 
-        string regRefreshToken = regResponse!.Cookies["Session-Refresh-Token"];
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
 
         AuthRequest loginRequest = new AuthRequest() { Username = username, Password = password };
 
@@ -171,8 +189,9 @@ public class AuthServiceTests
 
         List<string> tokensToEvaporate = new()
         {
-            loginResponse1!.Cookies["Session-Refresh-Token"],
-            loginResponse2!.Cookies["Session-Refresh-Token"]
+            loginResponse1.Cookies!["Session-Refresh-Token"],
+            loginResponse2.Cookies!["Session-Refresh-Token"],
+            regRefreshToken
         };
 
         AuthRequest changeRequest = new AuthRequest { Username = username, Password = password, NewPassword = Guid.NewGuid().ToString() };
@@ -187,10 +206,12 @@ public class AuthServiceTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == regRefreshToken), Is.True);
-
             foreach (string token in tokensToEvaporate)
-                Assert.That(_dbContext.RefreshTokens.Any(x => x.Token == token), Is.False);
+            {
+                string tokenRefreshHash = AuthSession.HashRefreshToken(token);
+
+                Assert.That(_dbContext.Sessions.Any(x => x.RefreshTokenHash == tokenRefreshHash), Is.False);
+            }
         });
     }
 
