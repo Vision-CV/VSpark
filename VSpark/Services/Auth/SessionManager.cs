@@ -21,7 +21,7 @@ public class SessionManager(IOptions<AuthSettings> authSettings, IDbContextFacto
 
         SessionTokensDto tokens = tokenManager.CreateSessionTokensPair(user, sessionId);
 
-        AuthSession session = new AuthSession(user, sessionExpires, tokens);
+        AuthSession session = new AuthSession(user, sessionExpires, tokens, sessionId);
 
         dbContext.Sessions.Add(session);
 
@@ -75,13 +75,15 @@ public class SessionManager(IOptions<AuthSettings> authSettings, IDbContextFacto
         if (owner == null)
             return null;
 
-        SessionTokensDto sessionTokens = tokenManager.CreateSessionTokensPair(owner, session.SessionId);
+        await jwtBlacklist.BlacklistTokenAsync(session.JwtId, session.JwtExpires);
 
-        session.SetTokens(sessionTokens);
+        SessionTokensDto newSessionTokens = tokenManager.CreateSessionTokensPair(owner, session.SessionId);
+
+        session.SetTokens(newSessionTokens);
 
         await dbContext.SaveChangesAsync();
 
-        return sessionTokens;
+        return newSessionTokens;
     }
 
     public async Task RevokeAllExpiredSessionsAsync()
@@ -98,7 +100,9 @@ public class SessionManager(IOptions<AuthSettings> authSettings, IDbContextFacto
     {
         await using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        AuthSession? targetSession = await dbContext.Sessions.FirstOrDefaultAsync(x => AuthSession.HashRefreshToken(refresh) == x.RefreshTokenHash); ;
+        string refreshHash = AuthSession.HashRefreshToken(refresh);
+
+        AuthSession? targetSession = await dbContext.Sessions.FirstOrDefaultAsync(x => refreshHash == x.RefreshTokenHash); ;
 
         if (targetSession == null)
             return null;
@@ -108,7 +112,9 @@ public class SessionManager(IOptions<AuthSettings> authSettings, IDbContextFacto
 
     private async Task<AuthSession?> GetSessionByRefreshAsync(string refresh, SparkDbContext dbContext)
     {
-        AuthSession? targetSession = await dbContext.Sessions.FirstOrDefaultAsync(x => AuthSession.HashRefreshToken(refresh) == x.RefreshTokenHash); ;
+        string refreshHash = AuthSession.HashRefreshToken(refresh);
+
+        AuthSession? targetSession = await dbContext.Sessions.FirstOrDefaultAsync(x => refreshHash == x.RefreshTokenHash); ;
 
         if (targetSession == null)
             return null;

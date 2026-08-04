@@ -39,7 +39,9 @@ public class JwtBlacklistRepository(IDbContextFactory<SparkDbContext> dbFactory)
 
         using SparkDbContext dbContext = await dbFactory.CreateDbContextAsync();
 
-        if (await dbContext.JwtBlacklist.AnyAsync(x => x.JwtId == targetToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Jti).Value))
+        string jti = targetToken.Claims.First(x => x.Type == JwtRegisteredClaimNames.Jti).Value;
+
+        if (await dbContext.JwtBlacklist.AnyAsync(x => x.JwtId == jti))
             return false;
 
         return true;

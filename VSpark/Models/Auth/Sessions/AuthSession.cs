@@ -10,9 +10,9 @@ public class AuthSession
 {
     private AuthSession() { }
 
-    public AuthSession(User owner, DateTime expires, SessionTokensDto tokens)
+    public AuthSession(User owner, DateTime expires, SessionTokensDto tokens, Guid sessionId)
     {
-        SessionId = Guid.NewGuid();
+        SessionId = sessionId;
 
         OwnerId = owner.UserId;
         ExpiresAt = expires;

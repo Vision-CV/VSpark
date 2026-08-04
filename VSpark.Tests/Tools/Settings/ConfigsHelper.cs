@@ -8,7 +8,8 @@ public static class ConfigsHelper
 {
     public static IOptions<AuthSettings> AuthOptions = Options.Create<AuthSettings>(new()
     {
-        DefaultRole = "User"
+        DefaultRole = "User",
+        SessionExpirationDays = 3
     });
 
     public static IOptions<JwtSettings> JwtSettings = Options.Create(new JwtSettings
