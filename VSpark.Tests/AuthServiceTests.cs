@@ -1,9 +1,10 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+﻿using Microsoft.Extensions.Options;
 
 using System.Net;
 
 using VSpark.Models.Auth;
-using VSpark.Models.Auth.Tokens;
+using VSpark.Models.Auth.Sessions;
+using VSpark.Models.Config;
 using VSpark.Persistence;
 using VSpark.Services.Auth;
 using VSpark.Tests.Tools.Persistence;
@@ -15,15 +16,15 @@ namespace VSpark.Tests;
 
 public class AuthServiceTests
 {
-    // TODO: Add integrational tests of the jwt blacklist correct work.
+    private IAuthService _authService;
+    private ISessionManager _sessionManager;
+    private IJwtBlacklistRepository _jwtBlacklist;
 
-    // Attention! Instances of this field have a per-test lifecycle. Do not touch em.
+    private IOptions<AuthSettings> _authSettings = ConfigsHelper.AuthOptions;
+    private IOptions<JwtSettings> _jwtSettings = ConfigsHelper.JwtSettings;
+
     private MemDbContextFactory _dbFactory;
     private SparkDbContext _dbContext;
-
-    private JwtBlacklistRepository _jwtBlacklist;
-    private TokenManager _tokenManager;
-    private AuthService _authService;
 
     [SetUp]
     public void Setup()
@@ -32,8 +33,8 @@ public class AuthServiceTests
         _dbContext = _dbFactory.CreateDbContext();
 
         _jwtBlacklist = new JwtBlacklistRepository(_dbFactory);
-        //_tokenManager = new TokenManager(ConfigsHelper.JwtSettings, _dbFactory, _jwtBlacklist);
-        //_authService = new AuthService(ConfigsHelper.AuthOptions, _dbFactory, _tokenManager, new NullLogger<AuthService>());
+        _sessionManager = new SessionManager(_authSettings, _dbFactory, new TokenManager(_jwtSettings), _jwtBlacklist);
+        _authService = new AuthService(ConfigsHelper.AuthOptions, _dbFactory, _sessionManager);
     }
 
     [TearDown]
@@ -43,8 +44,176 @@ public class AuthServiceTests
         _dbContext.Dispose();
     }
 
-    // TODO: Old tests have been evaporated by refactor. Next commit will return tests.
-    // Previous auth system version tests you can find in previous versions of the repo.
+    [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
+    [TestCase("Sarah", "Mitchell", "sarahdev", "wo2wpas22s")]
+    [TestCase("Daniel", "Thompson", "danieladmin", "greatestpass")]
+    [TestCase("Emma", "Wilson", "emmaoperator", "excit_ing-pass")]
+    [TestCase("Robert", "Johnson", "robservice", "#(#$(@)(#@()#*THISMYPASS")]
+    [TestCase("Olivia", "Brown", "oliviauser", "_____000__--_-_")]
+    public async Task TryRegisterAsync_RegistersSuccessfully_NewUserAndSessionAreExistsInDatabase(string name, string surname, string username, string password)
+    {
+        RegRequest regRequest = new RegRequest { Username = username, Name = name, Surname = surname, Password = password };
+
+        AuthResponse response = await _authService.TryRegisterAsync(regRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(response));
+
+        Assert.That(_dbContext.Users.Count(x => x.Username == regRequest.Username), Is.EqualTo(1), "Looks like we've registered two equal users.");
+
+        User registeredUser = _dbContext.Users.First(x => x.Username == regRequest.Username);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(registeredUser.Username, Is.EqualTo(regRequest.Username));
+            Assert.That(registeredUser.FirstName, Is.EqualTo(regRequest.Name));
+            Assert.That(registeredUser.SecondName, Is.EqualTo(regRequest.Surname));
+            Assert.That(registeredUser.Role, Is.EqualTo(ConfigsHelper.AuthOptions.Value.DefaultRole));
+
+            Assert.That(registeredUser.PasswordHash, Is.Not.Null);
+            Assert.That(Verify(regRequest.Password, registeredUser.PasswordHash), Is.True);
+        });
+    }
+
+    [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
+    [TestCase("Sarah", "Mitchell", "sarahdev", "wo2wpas22s")]
+    [TestCase("Daniel", "Thompson", "danieladmin", "greatestpass")]
+    [TestCase("Emma", "Wilson", "emmaoperator", "excit_ing-pass")]
+    [TestCase("Robert", "Johnson", "robservice", "#(#$(@)(#@()#*THISMYPASS")]
+    [TestCase("Olivia", "Brown", "oliviauser", "_____000__--_-_")]
+    public async Task TryLoginAsync_LoginSuccessful_NewRefreshSavedInDatabase(string name, string surname, string username, string password)
+    {
+        RegRequest regRequest = new RegRequest { Username = username, Name = name, Surname = surname, Password = password };
+
+        AuthResponse regResponse = await _authService.TryRegisterAsync(regRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
+
+        AuthRequest authRequest = new() { Username = username, Password = password };
+
+        AuthResponse loginResponse = await _authService.TryLoginAsync(authRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(loginResponse));
+
+        User? targetUser = _dbContext.Users.FirstOrDefault(x => x.Username == username);
+
+        Assert.That(targetUser, Is.Not.Null);
+
+        Assert.That(_dbContext.Sessions.Any(x => x.OwnerId == targetUser.UserId));
+    }
+
+    [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
+    [TestCase("Sarah", "Mitchell", "sarahdev", "wo2wpas22s")]
+    [TestCase("Daniel", "Thompson", "danieladmin", "greatestpass")]
+    [TestCase("Emma", "Wilson", "emmaoperator", "excit_ing-pass")]
+    [TestCase("Robert", "Johnson", "robservice", "#(#$(@)(#@()#*THISMYPASS")]
+    [TestCase("Olivia", "Brown", "oliviauser", "_____000__--_-_")]
+    public async Task TryRenewSessionAsync_RenewSuccessful_NewTokenExistsInDatabase_OldTokenIsGone(string name, string surname, string username, string password)
+    {
+        RegRequest regRequest = new RegRequest { Username = username, Name = name, Surname = surname, Password = password };
+
+        AuthResponse regResponse = await _authService.TryRegisterAsync(regRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
+
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
+
+        AuthResponse renewResponse = await _authService.TryRenewSessionAsync(regRefreshToken);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(renewResponse));
+
+        string renewRefreshToken = renewResponse.Cookies!["Session-Refresh-Token"];
+
+        Assert.That(renewResponse!.Cookies["Session-Refresh-Token"], Is.Not.EqualTo(regRefreshToken));
+
+        Assert.Multiple(() =>
+        {
+            string renewRefreshTokenHash = AuthSession.HashRefreshToken(renewRefreshToken);
+            string regRefreshTokenHash = AuthSession.HashRefreshToken(regRefreshToken);
+
+            bool sessionWithNewTokenExists = _dbContext.Sessions.Any(x => x.RefreshTokenHash == renewRefreshTokenHash);
+            bool sessionWithOldTokenExists = _dbContext.Sessions.Any(x => x.RefreshTokenHash == regRefreshTokenHash);
+
+            Assert.That(sessionWithNewTokenExists, Is.True);
+            Assert.That(sessionWithOldTokenExists, Is.False);
+        });
+    }
+
+    [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
+    [TestCase("Sarah", "Mitchell", "sarahdev", "wo2wpas22s")]
+    [TestCase("Daniel", "Thompson", "danieladmin", "greatestpass")]
+    [TestCase("Emma", "Wilson", "emmaoperator", "excit_ing-pass")]
+    [TestCase("Robert", "Johnson", "robservice", "#(#$(@)(#@()#*THISMYPASS")]
+    [TestCase("Olivia", "Brown", "oliviauser", "_____000__--_-_")]
+    public async Task TryLogoutAsync_LogoutSuccessful_OldTokenRemoved(string name, string surname, string username, string password)
+    {
+        RegRequest regRequest = new RegRequest { Username = username, Name = name, Surname = surname, Password = password };
+
+        AuthResponse regResponse = await _authService.TryRegisterAsync(regRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
+
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
+
+        AuthResponse logoutResponse = await _authService.TryLogoutAsync(regRefreshToken);
+
+        Assert.That(logoutResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        string regRefreshTokenHash = AuthSession.HashRefreshToken(regRefreshToken);
+
+        Assert.That(_dbContext.Sessions.Any(x => x.RefreshTokenHash == regRefreshTokenHash), Is.False);
+    }
+
+    [TestCase("Michael", "Anderson", "mikeuser", "bestpassever")]
+    [TestCase("Sarah", "Mitchell", "sarahdev", "wo2wpas22s")]
+    [TestCase("Daniel", "Thompson", "danieladmin", "greatestpass")]
+    [TestCase("Emma", "Wilson", "emmaoperator", "excit_ing-pass")]
+    [TestCase("Robert", "Johnson", "robservice", "#(#$(@)(#@()#*THISMYPASS")]
+    [TestCase("Olivia", "Brown", "oliviauser", "_____000__--_-_")]
+    public async Task TryChangePasswordAsync_ChangedSuccessful_ChangedInDatabase_AllTokensEvaporated(string name, string surname, string username, string password)
+    {
+        RegRequest regRequest = new RegRequest { Username = username, Name = name, Surname = surname, Password = password };
+
+        AuthResponse regResponse = await _authService.TryRegisterAsync(regRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(regResponse));
+
+        string regRefreshToken = regResponse.Cookies!["Session-Refresh-Token"];
+
+        AuthRequest loginRequest = new AuthRequest() { Username = username, Password = password };
+
+        AuthResponse loginResponse1 = await _authService.TryLoginAsync(loginRequest);
+        AuthResponse loginResponse2 = await _authService.TryLoginAsync(loginRequest);
+
+        Assert.Multiple(() => VerifySessionResponseIntegrity(loginResponse1));
+        Assert.Multiple(() => VerifySessionResponseIntegrity(loginResponse1));
+
+        List<string> tokensToEvaporate = new()
+        {
+            loginResponse1.Cookies!["Session-Refresh-Token"],
+            loginResponse2.Cookies!["Session-Refresh-Token"],
+            regRefreshToken
+        };
+
+        AuthRequest changeRequest = new AuthRequest { Username = username, Password = password, NewPassword = Guid.NewGuid().ToString() };
+
+        AuthResponse changePasswordResponse = await _authService.TryChangePasswordAsync(changeRequest, regRefreshToken);
+
+        Assert.That(changePasswordResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        User? ourUser = _dbContext.Users.FirstOrDefault(x => x.Username == username);
+
+        Assert.That(ourUser, Is.Not.Null, "Registration method wasn't saved a new user to the database.");
+
+        Assert.Multiple(() =>
+        {
+            foreach (string token in tokensToEvaporate)
+            {
+                string tokenRefreshHash = AuthSession.HashRefreshToken(token);
+
+                Assert.That(_dbContext.Sessions.Any(x => x.RefreshTokenHash == tokenRefreshHash), Is.False);
+            }
+        });
+    }
 
     private void VerifySessionResponseIntegrity(AuthResponse response)
     {
