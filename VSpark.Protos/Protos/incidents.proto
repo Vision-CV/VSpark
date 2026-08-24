@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option csharp_namespace = "VSpark.Protos";
+
+service IncidentService {
+  rpc CreateIncidentAsync (CreateIncidentRequest, stream FileChunk) returns (CreateIncidentResponse);
+}
+
+enum IncidentType {
+  INCIDENT_TYPE_UNSPECIFIED = 0;
+  INCIDENT_TYPE_PPE = 1;
+  INCIDENT_TYPE_TRAUMA = 2;
+  INCIDENT_TYPE_SMOKING = 3;
+}
+
+message CreateIncidentRequest {
+  string description = 0; 
+  int32 type = 1; 
+  string reporter_id = 2;
+  string severity = 3;
+}
+
+message UploadIncidentArtifact {
+	FileChunk file = 0;
+}
+
+message CreateIncidentResponse {
+  string incident_id = 0;
+  string status = 1;
+  string created_at = 2;
+}
+
+message UpdateIncidentRequest {
+	int32 Priority = 0;
+	int32 Status = 1;
+}

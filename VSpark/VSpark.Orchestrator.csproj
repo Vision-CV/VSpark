@@ -26,4 +26,8 @@
     <Folder Include="wwwroot\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\VSpark.Protos\VSpark.Protos.csproj" />
+  </ItemGroup>
+
 </Project>

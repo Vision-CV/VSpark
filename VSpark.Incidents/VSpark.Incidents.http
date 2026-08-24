@@ -1,0 +1,6 @@
+@VSpark.Incidents_HostAddress = http://localhost:5163
+
+GET {{VSpark.Incidents_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

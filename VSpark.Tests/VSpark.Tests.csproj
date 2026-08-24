@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VSpark\VSpark.csproj" />
+    <ProjectReference Include="..\VSpark\VSpark.Orchestrator.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,4 +9,4 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR app
 COPY --from=builder /app/publish .
 
-ENTRYPOINT ["dotnet", "VSpark.Orchestrator.dll"]
+ENTRYPOINT ["dotnet", "VSpark.Incidents.dll"]

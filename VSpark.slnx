@@ -2,6 +2,8 @@
   <Folder Name="/Solution Items/">
     <File Path="docker-compose.yml" />
   </Folder>
+  <Project Path="VSpark.Incidents/VSpark.Incidents.csproj" Id="4c9f63fb-937d-4649-9b05-f0e87249d463" />
+  <Project Path="VSpark.Protos/VSpark.Protos.csproj" Id="8ed9a61f-596d-4faa-ade4-2e2010941eab" />
   <Project Path="VSpark.Tests/VSpark.Tests.csproj" Id="5a0ad9b7-ecd8-404f-9e01-b629af53ce87" />
-  <Project Path="VSpark/VSpark.csproj" />
+  <Project Path="VSpark/VSpark.Orchestrator.csproj" />
 </Solution>
