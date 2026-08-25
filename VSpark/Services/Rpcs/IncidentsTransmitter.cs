@@ -1,6 +1,4 @@
-﻿using VSpark.Protos;
-
-namespace VSpark.Orchestrator.Services.Rpcs;
+﻿namespace VSpark.Orchestrator.Services.Rpcs;
 
 public class IncidentsTransmitter
 {

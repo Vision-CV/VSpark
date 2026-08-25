@@ -1,3 +1,3 @@
 ﻿namespace VSpark.Incidents.Models.Dtos;
 
-public record IncidentDto();
+public record IncidentDto(Guid Guid, int Type, );
