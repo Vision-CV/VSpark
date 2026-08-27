@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 
 using System.Net;
-
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Sessions;
 using VSpark.Models.Config;
@@ -12,7 +11,7 @@ using VSpark.Tests.Tools.Settings;
 
 using static BCrypt.Net.BCrypt;
 
-namespace VSpark.Tests;
+namespace VSpark.Tests.Orchestrator;
 
 public class AuthServiceTests
 {

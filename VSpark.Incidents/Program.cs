@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+
 using Npgsql;
+
+using VSpark.Incidents.Models.Configs;
 using VSpark.Incidents.Persistence;
 using VSpark.Incidents.Rpcs;
 
@@ -12,6 +15,7 @@ namespace VSpark.Incidents
             var builder = WebApplication.CreateBuilder(args);
 
             var connectionSettings = builder.Configuration.GetSection("DbConnection");
+            var artifactsConfig = builder.Configuration.GetSection("ArtifactsConfig");
 
             NpgsqlConnectionStringBuilder connectionStringBuilder = new NpgsqlConnectionStringBuilder
             {
@@ -25,6 +29,8 @@ namespace VSpark.Incidents
             builder.Services.AddDbContextFactory<EventDbContext>(options => options.UseNpgsql(connectionStringBuilder.ConnectionString));
 
             builder.Services.AddGrpc();
+
+            builder.Services.Configure<ArtifactsConfig>(artifactsConfig);
 
             var app = builder.Build();
 

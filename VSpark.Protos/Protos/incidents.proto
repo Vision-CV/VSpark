@@ -5,9 +5,15 @@ option csharp_namespace = "VSpark.Protos";
 import "google/protobuf/empty.proto";
 
 service IncidentService {
-  rpc CreateIncidentAsync (CreateIncidentRequest) returns (CreateIncidentResponse);
+  rpc CreateIncidentAsync (CreateIncidentRequest) returns (GuidMessage);
 
-  rpc UploadIncidentArtifact (stream UploadIncidentArtifactRequest) returns (google.protobuf.Empty);
+  rpc UploadIncidentArtifactAsync (stream UploadIncidentArtifactRequest) returns (UniversalResponse);
+
+  rpc ChangeIncidentStatusAsync (UpdateIncidentStatusRequest) returns (UniversalResponse);
+
+  rpc DeleteIncidentAsync (GuidMessage) returns (UniversalResponse);
+
+  rpc GetIncidentAsync (GuidMessage) returns (GetIncidentResponse);
 }
 
 enum IncidentType {
@@ -31,10 +37,9 @@ enum IncidentStatus {
 }
 
 message CreateIncidentRequest {
-  string description = 1; 
-  int32 type = 2; 
-  string reporter_id = 3;
-  string severity = 4;
+	int32 type = 1;
+	int32 priority = 2;
+	int32 area_id = 3;
 }
 
 message UploadIncidentArtifactRequest {
@@ -44,13 +49,25 @@ message UploadIncidentArtifactRequest {
 	}
 }
 
-message CreateIncidentResponse {
-  string incident_id = 1;
-  string status = 2;
-  string created_at = 3;
+message UpdateIncidentStatusRequest {
+	string guid = 1;
+	IncidentStatus status = 2;
 }
 
-message UpdateIncidentRequest {
-	int32 Priority = 1;
-	int32 Status = 2;
+message GuidMessage {
+	int32 success = 1;
+	string guid = 2;
+}
+
+message GetIncidentResponse {
+	int32 success = 1;
+	string guid = 2;
+	IncidentType type = 3;
+	IncidentStatus status = 4;
+	IncidentPriority priority = 5;
+}
+
+message UniversalResponse {
+	int32 success = 1;
+	int32 status = 2;
 }
