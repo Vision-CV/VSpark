@@ -1,6 +1,6 @@
 ﻿namespace VSpark.Orchestrator.Services.Rpcs;
 
-public class IncidentsTransmitter
+public class IncidentsBridge
 {
     public async Task AddIncidentAsync()
     {

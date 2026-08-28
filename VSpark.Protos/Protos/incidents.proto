@@ -2,8 +2,6 @@ syntax = "proto3";
 
 option csharp_namespace = "VSpark.Protos";
 
-import "google/protobuf/empty.proto";
-
 service IncidentService {
   rpc CreateIncidentAsync (CreateIncidentRequest) returns (GuidMessage);
 

@@ -1,7 +1,5 @@
 ﻿using Grpc.Core;
 
-using System.Net;
-
 using VSpark.Incidents.Models.Adapters;
 using VSpark.Incidents.Models.Dtos;
 using VSpark.Incidents.Services;
@@ -24,38 +22,22 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
 
     public override async Task<UniversalResponse> UploadIncidentArtifactAsync(IAsyncStreamReader<UploadIncidentArtifactRequest> requestStream, ServerCallContext context)
     {
-        UniversalResponse response = new();
-
-        // DRY
         if (!await requestStream.MoveNext(context.CancellationToken))
-        {
-            response.Status = (int)HttpStatusCode.BadRequest;
-
-            return response;
-        }
+            return UniversalBadRequest();
 
         if (requestStream.Current.DataCase != UploadIncidentArtifactRequest.DataOneofCase.Guid)
-        {
-            response.Status = (int)HttpStatusCode.BadRequest;
-
-            return response;
-        }
-
+            return UniversalBadRequest();
+               
         UploadIncidentArtifactRequest dataRequest = requestStream.Current;
 
         if (!Guid.TryParse(dataRequest.Guid, out _))
-            return response;
+            return UniversalBadRequest();
 
         using MemoryStream artifactStream = new();
         while (await requestStream.MoveNext(context.CancellationToken))
         {
-            // DRY
             if (requestStream.Current.DataCase != UploadIncidentArtifactRequest.DataOneofCase.File)
-            {
-                response.Status = (int)HttpStatusCode.BadRequest;
-
-                return response;
-            }
+                return UniversalBadRequest();
 
             artifactStream.Write(requestStream.Current.File.ToByteArray());
         }
@@ -64,17 +46,22 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
 
         await incidentsManager.SaveArtifactAsync(dataRequest.Guid, artifactStream);
 
-        response.Success = 1;
+        UniversalResponse response = new() { Success = 1 };
 
         return response;
     }
 
     public override async Task<UniversalResponse> ChangeIncidentStatusAsync(UpdateIncidentStatusRequest request, ServerCallContext context)
     {
-        // Unsafe
+        if (!Enum.IsDefined(typeof(Enums.IncidentStatus), request.Status) || !Enum.IsDefined(typeof(Protos.IncidentStatus), request.Status))
+            return UniversalBadRequest();
+
         Enums.IncidentStatus status = (Enums.IncidentStatus)request.Status;
 
-        OpResult opResult = await incidentsManager.ChangeIncidentStatus(Guid.Parse(request.Guid), status);
+        if (string.IsNullOrEmpty(request.Guid) || !Guid.TryParse(request.Guid, out Guid guid))
+            return UniversalBadRequest();
+
+        OpResult opResult = await incidentsManager.ChangeIncidentStatus(guid, status);
 
         if (!opResult.IsSuccess)
             return new UniversalResponse { Status = opResult.Status, Success = 0 };
@@ -84,21 +71,35 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
 
     public override async Task<UniversalResponse> DeleteIncidentAsync(GuidMessage request, ServerCallContext context)
     {
-        // Unsafe
-        OpResult opResult = await incidentsManager.DeleteIncidentAsync(Guid.Parse(request.Guid));
+        UniversalResponse response = new();
+
+        if (string.IsNullOrEmpty(request.Guid) || !Guid.TryParse(request.Guid, out Guid guid))
+            return UniversalBadRequest();
+
+        OpResult opResult = await incidentsManager.DeleteIncidentAsync(guid);
 
         if (!opResult.IsSuccess)
-            return new UniversalResponse { Status = opResult.Status, Success = 0 };
+        {
+            response.Status = opResult.Status;
 
-        return new UniversalResponse { Status = 200, Success = 1 };
+            return response;
+        }
+
+        return response;
     }
 
     public override async Task<GetIncidentResponse> GetIncidentAsync(GuidMessage request, ServerCallContext context)
     {
-        // Unsafe
-        IncidentDto? incident = await incidentsManager.GetIncidentAsync(Guid.Parse(request.Guid));
-
         GetIncidentResponse response = new();
+
+        if (string.IsNullOrEmpty(request.Guid) || !Guid.TryParse(request.Guid, out Guid guid))
+        {
+            response.Success = 0;
+
+            return response;
+        }
+
+        IncidentDto? incident = await incidentsManager.GetIncidentAsync(guid);
 
         if (incident == null)
         {
@@ -116,4 +117,6 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
 
         return response;
     }
+
+    private UniversalResponse UniversalBadRequest() => new UniversalResponse { Status = 400, Success = 0 };
 }
