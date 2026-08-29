@@ -11,7 +11,7 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
 {
     // TODO: Validation & DRY integration required.
 
-    public override async Task<GuidMessage> CreateIncidentAsync(CreateIncidentRequest request, ServerCallContext context)
+    public override async Task<GuidMessage> CreateIncident(CreateIncidentRequest request, ServerCallContext context)
     {
         NewIncidentDto incidentDto = new NewIncidentDto((int)request.Type, (int)request.Priority);
 
@@ -20,7 +20,7 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
         return new GuidMessage { Guid = operationResult.Response };
     }
 
-    public override async Task<UniversalResponse> UploadIncidentArtifactAsync(IAsyncStreamReader<UploadIncidentArtifactRequest> requestStream, ServerCallContext context)
+    public override async Task<UniversalResponse> UploadIncidentArtifact(IAsyncStreamReader<UploadIncidentArtifactRequest> requestStream, ServerCallContext context)
     {
         if (!await requestStream.MoveNext(context.CancellationToken))
             return UniversalBadRequest();
@@ -51,7 +51,7 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
         return response;
     }
 
-    public override async Task<UniversalResponse> ChangeIncidentStatusAsync(UpdateIncidentStatusRequest request, ServerCallContext context)
+    public override async Task<UniversalResponse> ChangeIncidentStatus(UpdateIncidentStatusRequest request, ServerCallContext context)
     {
         if (!Enum.IsDefined(typeof(Enums.IncidentStatus), request.Status) || !Enum.IsDefined(typeof(Protos.IncidentStatus), request.Status))
             return UniversalBadRequest();
@@ -69,7 +69,7 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
         return new UniversalResponse { Status = 200, Success = 1 };
     }
 
-    public override async Task<UniversalResponse> DeleteIncidentAsync(GuidMessage request, ServerCallContext context)
+    public override async Task<UniversalResponse> DeleteIncident(GuidMessage request, ServerCallContext context)
     {
         UniversalResponse response = new();
 
@@ -88,7 +88,7 @@ public class IncidentsGrpc(IncidentsManager incidentsManager) : IncidentService.
         return response;
     }
 
-    public override async Task<GetIncidentResponse> GetIncidentAsync(GuidMessage request, ServerCallContext context)
+    public override async Task<GetIncidentResponse> GetIncident(GuidMessage request, ServerCallContext context)
     {
         GetIncidentResponse response = new();
 

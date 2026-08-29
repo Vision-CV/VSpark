@@ -3,15 +3,15 @@ syntax = "proto3";
 option csharp_namespace = "VSpark.Protos";
 
 service IncidentService {
-  rpc CreateIncidentAsync (CreateIncidentRequest) returns (GuidMessage);
+  rpc CreateIncident (CreateIncidentRequest) returns (GuidMessage);
 
-  rpc UploadIncidentArtifactAsync (stream UploadIncidentArtifactRequest) returns (UniversalResponse);
+  rpc UploadIncidentArtifact (stream UploadIncidentArtifactRequest) returns (UniversalResponse);
 
-  rpc ChangeIncidentStatusAsync (UpdateIncidentStatusRequest) returns (UniversalResponse);
+  rpc ChangeIncidentStatus (UpdateIncidentStatusRequest) returns (UniversalResponse);
 
-  rpc DeleteIncidentAsync (GuidMessage) returns (UniversalResponse);
+  rpc DeleteIncident (GuidMessage) returns (UniversalResponse);
 
-  rpc GetIncidentAsync (GuidMessage) returns (GetIncidentResponse);
+  rpc GetIncident (GuidMessage) returns (GetIncidentResponse);
 }
 
 enum IncidentType {
