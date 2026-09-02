@@ -5,22 +5,44 @@ using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
 
 using VSpark.Hubs;
+using VSpark.Orchestrator.Services.Rpcs;
+using VSpark.Protos;
 
 namespace VSpark.API.Controllers;
 
 [Authorize(AuthenticationSchemes = "Bearer,X-API")]
 [ApiController]
-[Route("api/[controller]")]
-public class MetricsController(IHubContext<MetricsHub> hubContext) : ControllerBase
+[Route("api/v1/[controller]")]
+public class MetricsController(IncidentsBridge bridge, IHubContext<MetricsHub> hubContext, CancellationToken ct) : ControllerBase
 {
+    // TODO: Incident timestamp required.
     [Authorize(Roles = "SA")]
     [HttpPost("send-incident")]
     [EndpointDescription("Отправка нового инцидента на сервер.")]
     public async Task<IActionResult> SendIncident([FromForm] string? incident, IFormFile? image)
     {
+        if (incident == null)
+            return BadRequest("Wron incident data sent.");
 
-        
-        return Ok($"Incident successfully saved");
+        IncidentDto? incidentDto = JsonConvert.DeserializeObject<IncidentDto>(incident);
+
+        if (incidentDto == null)
+            return BadRequest("Failed to parse an incident.");
+
+        MemoryStream artifactStream = new MemoryStream();
+
+        if (image != null)
+            await image.CopyToAsync(artifactStream);
+
+        GuidMessage? response = await bridge.CreateIncidentAsync(incidentDto, artifactStream, ct);
+
+        if (response == null)
+            return StatusCode(500, "Something went wrong.");
+
+        if (response.Success == 1)
+            return Ok($"Incident successfully created by id: {response.Guid}");
+
+        return StatusCode(500, "Request failed.");
     }
 
     [Authorize(Roles = "SA")]

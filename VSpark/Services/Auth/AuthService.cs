@@ -12,6 +12,7 @@ using static BCrypt.Net.BCrypt;
 
 namespace VSpark.Services.Auth;
 
+// TODO: Transactions required.
 public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<SparkDbContext> dbFactory, ISessionManager sessionManager) : IAuthService
 {
     public async Task<AuthResponse> TryLoginAsync(AuthRequest request)
@@ -71,7 +72,7 @@ public class AuthService(IOptions<AuthSettings> authSettings, IDbContextFactory<
         dbContext.Users.Add(createdUser);
 
         await dbContext.SaveChangesAsync();
-
+        
         return await CreateSessionAsync(createdUser);
     }
 

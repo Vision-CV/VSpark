@@ -40,7 +40,7 @@ public class IncidentsBridge(IncidentService.IncidentServiceClient grpcClient)
         return true;
     }
 
-    public async Task<GuidMessage?> CreateIncidentAsync(int type, int priority, int areaId, Stream artifact, CancellationToken ct)
+    public async Task<GuidMessage?> CreateIncidentAsync(IncidentDto incident, Stream artifact, CancellationToken ct)
     {
         int bufferLen = 64 * 1024;
 
@@ -50,9 +50,9 @@ public class IncidentsBridge(IncidentService.IncidentServiceClient grpcClient)
         {
             CreateIncidentRequest request = new CreateIncidentRequest
             {
-                Type = type,
-                Priority = priority,
-                AreaId = areaId
+                Type = incident.Type,
+                Priority = incident.Priority,
+                AreaId = incident.AreaId
             };
 
             GuidMessage response = await grpcClient.CreateIncidentAsync(request, cancellationToken: ct);
