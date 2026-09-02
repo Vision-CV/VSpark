@@ -45,6 +45,7 @@
 - ASP.NET Core
 - REST API
 - SignalR
+- gRPC
 - Entity Framework Core
 
 ## Авторизация

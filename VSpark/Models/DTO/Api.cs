@@ -1,0 +1,1 @@
+﻿public record IncidentDto(int Type, int Status, int Priority, int AreaId);

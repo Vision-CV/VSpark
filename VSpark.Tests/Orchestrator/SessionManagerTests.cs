@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 
 using System.IdentityModel.Tokens.Jwt;
-
 using VSpark.Models.Auth;
 using VSpark.Models.Auth.Sessions;
 using VSpark.Models.Config;
@@ -11,7 +10,7 @@ using VSpark.Services.Auth;
 using VSpark.Tests.Tools.Persistence;
 using VSpark.Tests.Tools.Settings;
 
-namespace VSpark.Tests;
+namespace VSpark.Tests.Orchestrator;
 
 public class SessionManagerTests
 {

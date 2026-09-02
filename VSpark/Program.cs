@@ -13,10 +13,11 @@ using VSpark.AuthSchemes.Configs;
 using VSpark.Hubs;
 using VSpark.Middleware;
 using VSpark.Models.Config;
+using VSpark.Orchestrator.Services.Rpcs;
 using VSpark.Persistence;
+using VSpark.Protos;
 using VSpark.Services.Auth;
 using VSpark.Services.Background;
-using VSpark.Services.Metrics;
 
 namespace VSpark;
 
@@ -45,7 +46,7 @@ public class Program
 
         builder.Services.AddOpenApi();
 
-        // Источники секретов должны быть настраиваемыми
+        // The source of the secret must be configurable.
         var authSettings = builder.Configuration.GetSection("AuthSettings");
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
         var jwtSecret = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
@@ -76,15 +77,19 @@ public class Program
         builder.Services.Configure<JwtSettings>(jwtSettings);
         builder.Services.Configure<AuthSettings>(authSettings);
 
-        builder.Services.AddSingleton<IIncidentsRepository, IncidentsRepository>();
         builder.Services.AddSingleton<ITokenManager, TokenManager>();
         builder.Services.AddSingleton<ISessionManager, SessionManager>();
         builder.Services.AddSingleton<IJwtBlacklistRepository, JwtBlacklistRepository>();
+
+        builder.Services.AddSingleton<IncidentsBridge>();
 
         builder.Services.AddScoped<IAuthService, AuthService>();
 
         builder.Services.AddHostedService<SessionsCleanupWorker>();
         builder.Services.AddHostedService<JwtBlacklistCleanupWorker>();
+
+        // TODO: Configurable source required.
+        builder.Services.AddGrpcClient<IncidentService.IncidentServiceClient>(options => options.Address = new Uri(""));
 
         builder.Logging.AddConsole();
 

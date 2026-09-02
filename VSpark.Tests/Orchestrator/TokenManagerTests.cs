@@ -6,7 +6,7 @@ using VSpark.Models.DTO;
 using VSpark.Services.Auth;
 using VSpark.Tests.Tools.Settings;
 
-namespace VSpark.Tests;
+namespace VSpark.Tests.Orchestrator;
 
 public class TokenManagerTests
 {

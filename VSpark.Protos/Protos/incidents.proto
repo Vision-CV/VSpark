@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+option csharp_namespace = "VSpark.Protos";
+
+service IncidentService {
+  rpc CreateIncident (CreateIncidentRequest) returns (GuidMessage);
+
+  rpc UploadIncidentArtifact (stream UploadIncidentArtifactRequest) returns (UniversalResponse);
+
+  rpc ChangeIncidentStatus (UpdateIncidentStatusRequest) returns (UniversalResponse);
+
+  rpc DeleteIncident (GuidMessage) returns (UniversalResponse);
+
+  rpc GetIncident (GuidMessage) returns (GetIncidentResponse);
+}
+
+enum IncidentType {
+	INCIDENT_TYPE_UNSPECIFIED = 0;
+	INCIDENT_TYPE_PPE = 1;
+	INCIDENT_TYPE_TRAUMA = 2;
+	INCIDENT_TYPE_SMOKING = 3;
+}
+
+enum IncidentPriority {
+	INCIDENT_PRIORITY_STANDART = 0;
+	INCIDENT_PRIORITY_WARNING = 1;
+	INCIDENT_PRIORITY_CRITICAL = 2;
+}
+
+enum IncidentStatus {
+	INCIDENT_STATUS_ACTIVE = 0;
+	INCIDENT_STATUS_INREVIEW = 1;
+	INCIDENT_STATUS_CLOSED = 2;
+	INCIDENT_STATUS_ESCALATED = 3;
+}
+
+message CreateIncidentRequest {
+	int32 type = 1;
+	int32 priority = 2;
+	int32 area_id = 3;
+}
+
+message UploadIncidentArtifactRequest {
+	oneof data {
+		string guid = 1;
+		bytes file = 2;
+	}
+}
+
+message UpdateIncidentStatusRequest {
+	string guid = 1;
+	IncidentStatus status = 2;
+}
+
+message GuidMessage {
+	int32 success = 1;
+	string guid = 2;
+}
+
+message GetIncidentResponse {
+	int32 success = 1;
+	string guid = 2;
+	IncidentType type = 3;
+	IncidentStatus status = 4;
+	IncidentPriority priority = 5;
+}
+
+message UniversalResponse {
+	int32 success = 1;
+	int32 status = 2;
+}
